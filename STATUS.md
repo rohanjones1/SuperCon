@@ -1,12 +1,14 @@
 # Status
-- Current milestone: **M3 written** (pending pytest + run_arm_a.py)
-- M0-M2d all PASS. M3: Arm A pre-registered benchmark files written.
-- New files: lab/features.py, lab/benchmark.py, scripts/run_arm_a.py, tests/test_benchmark.py.
-- Features: 46 composition-only (9 props × 5 stats + nelements), pymatgen Element.
-- Benchmark: 5-fold grouped CV, RF(500,msl=3,balanced_subsample,seed=0), cluster bootstrap 1000.
-- Baselines: B0 (random seed=0), B1 (1/mean_atomic_mass, no training).
-- RERUN detection in run_arm_a.py; ledger records aggregate metrics + timing.
-- Reports written to reports/arm_a_results_run{id}.json + arm_a_oof_scores_run{id}.csv.
-- Next: run pytest tests/test_benchmark.py, then uv run python scripts/run_arm_a.py.
-- After M3 confirmed: M4 = stability engine (CHGNet relax + E_above_hull via MP hull).
-- Open: D6 (two model vendors) pending; structures.json disk space.
+- Current milestone: **M4a updated** (pending pytest tests/test_stability.py + --select-only run)
+- M0-M3 all PASS. M3 Arm A: H1 not supported, H2 inconclusive, 10K exploratory hypothesis-only (D16).
+- M4a: addendum_stability_001.yaml locked before running (user-edited version, no further changes).
+- lab/stability.py: leave-one-out hull — reference PD excludes target's material_id; max(0, E_chgnet - hull_epa).
+- lab/relax.py: CHGNet StructOptimizer fmax=0.1, steps=500; error field on failure.
+- scripts/calibrate_stability.py: bands=[0.00,0.05)/14, [0.05,0.10)/8, [0.10,0.20)/9, [0.20,0.30]/9.
+  Selection: sha256(mat_id) ordering, global 2-per-chemsys cap, no theoretical filter.
+  --select-only flag; Wilson 95% CI for precision/recall; INDETERMINATE recall if n_stable<10.
+  Prints frozen convention (lower hull MAE); records T1 results to ledger.
+- tests/test_stability.py: 3 synthetic PDEntry tests (no network): loso changes result, below hull=0, above hull=correct.
+- Next: uv run pytest tests/test_stability.py -v; then uv run python scripts/calibrate_stability.py --select-only.
+- After --select-only confirmed: uv run python scripts/calibrate_stability.py (full run with CHGNet).
+- Open: D6 (two model vendors) pending; CHGNet/torch version check.

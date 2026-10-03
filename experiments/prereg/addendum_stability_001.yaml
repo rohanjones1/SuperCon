@@ -1,0 +1,60 @@
+scope: >
+  Addendum to pre-registration 001. Covers M4a: stability engine calibration.
+  Establishes whether CHGNet + pymatgen PhaseDiagram gives hull distances consistent
+  with Materials Project DFT before anything is built on top.
+  Locked BEFORE scripts/calibrate_stability.py is run.
+
+question: >
+  Do CHGNet-relaxed energies and leave-one-out hull distances agree with MP DFT well
+  enough to use as a stability filter for candidate screening?
+
+calibration_set:
+  source: Materials Project (mp-api summary search)
+  query_criteria:
+    num_elements: 2
+    anion_elements: [B, C, Si]
+    other_element: "any metal: alkali, alkaline-earth, transition metal, lanthanide"
+    is_metal: true
+    theoretical: "not filtered (theoretical entries included, because unstable entries are needed to measure false positives)"
+    energy_above_hull_range: [0.0, 0.30]
+  bands_eV_per_atom_and_n:
+    { "[0.00,0.05)": 14, "[0.05,0.10)": 8, "[0.10,0.20)": 9, "[0.20,0.30]": 9 }
+  selection_procedure: >
+    Within each band sort qualifying entries by sha256(material_id) ascending (deterministic, no RNG);
+    take entries in that order up to the band's n, skipping any entry whose chemical system already has 2
+    selected entries. If a band has fewer qualifying entries, take all and report the shortfall.
+    Chosen ids and per-band counts are logged at runtime.
+  n_target: 40
+
+hull_definition: >
+  For each target entry: reference set = all MP entries in the target's chemical system (including elements)
+  EXCLUDING the target's own material_id (other polymorphs of the same composition stay in).
+  E_hull_chgnet = max(0, E_chgnet_per_atom - hull_energy_per_atom(reference PhaseDiagram, target composition)).
+  Ground truth = MP energy_above_hull. Two reference-energy conventions are computed: corrected and uncorrected MP entries.
+
+metrics:
+  a_energy_per_atom_mae: >
+    MAE of CHGNet relaxed energy per atom vs MP energy_per_atom (corrected) AND vs uncorrected_energy_per_atom.
+    The better-agreeing convention is reported; convention is NOT assumed in advance.
+  b_hull_mae: "MAE of E_hull_chgnet vs MP energy_above_hull, for both conventions."
+  c_stability_classification:
+    threshold_eV_per_atom: 0.05
+    positive_class: "stable: MP energy_above_hull <= 0.05"
+    report: "precision, recall, TP/FP/TN/FN, with Wilson 95% intervals"
+
+usability_criteria:
+  hull_mae_threshold_eV_per_atom: 0.06
+  recall_threshold: 0.80
+  rule: >
+    Usable iff hull MAE <= 0.06 AND recall >= 0.80, using the convention with the lower hull MAE
+    (that convention is then frozen for all later work). Otherwise "not usable as-is" with the numbers.
+    If fewer than 10 stable entries are in the final set, the recall criterion is "indeterminate", not pass/fail.
+    No post-hoc tuning of any kind.
+
+limitations:
+  - "CHGNet was trained on Materials Project data (MPtrj). This is an in-distribution check and says nothing about novel chemistries."
+  - "Binary metal borides/carbides/silicides at ambient pressure only; no oxides, ternaries or high pressure."
+  - "Starting structures come from MP (already DFT-relaxed), so relaxation tests energies, not structure prediction."
+  - "Recall estimated from about 14 stable entries is coarse; intervals will be wide."
+  - "Which energy convention pairs with CHGNet is measured here, not assumed."
+  - "Relaxation failures (fmax 0.1 eV/A, 500 steps) are reported, not retried."
