@@ -1,17 +1,21 @@
 """scripts/calibrate_stability.py — M4a: CHGNet vs MP stability calibration.
 
-Verifies addendum_stability_001.yaml, fetches qualifying MP entries (cached),
-selects up to 40 via the addendum's deterministic procedure, relaxes with CHGNet,
-computes leave-one-out hull distances under two energy conventions, and writes
-reports/stability_calibration.{json,csv}.
+Verifies addendum + amendment, fetches GGA_GGA+U entries (cached), selects
+up to 40 compounds deterministically, relaxes with CHGNet, computes leave-one-out
+hull distances under corrected and uncorrected conventions, writes reports.
 
 Usage:
     uv run python scripts/calibrate_stability.py [--ledger PATH] [--select-only]
 
---select-only: run MP fetch + selection only; print per-band counts and chosen
-ids, then exit without relaxing anything.
+--select-only: fetch + selection only; print per-band counts and chosen ids, exit.
 
 Network calls only when cache files under data/raw/ are absent.
+Amendment A changes (before any metric was seen):
+  - Competing entries: GGA_GGA+U only (additional_criteria), no compatible_only toggle.
+  - Uncorrected convention: uncorrected_energy_per_atom of the same entries.
+  - Ground truth: energy_above_hull from GGA_GGA+U thermo doc (summary kept as ref column).
+  - Compounds with no GGA_GGA+U thermo doc: excluded and printed.
+  - Partial CSV: append each compound immediately; skip on rerun.
 """
 from __future__ import annotations
 
@@ -38,13 +42,14 @@ from lab.ledger import (
 )
 from lab.relax import relax_structure
 from lab.stability import e_above_hull
+from pymatgen.analysis.phase_diagram import PDEntry
+from pymatgen.core import Composition
 
-ADDENDUM_PATH = Path("experiments/prereg/addendum_stability_001.yaml")
-RAW_DIR = Path("data/raw")
-REPORTS_DIR = Path("reports")
+ADDENDUM_PATH  = Path("experiments/prereg/addendum_stability_001.yaml")
+AMENDMENT_PATH = Path("experiments/prereg/addendum_stability_001_amendment_a.yaml")
+RAW_DIR        = Path("data/raw")
+REPORTS_DIR    = Path("reports")
 
-# Bands from addendum: (lo_inclusive, hi_exclusive_or_inclusive, n_target, label)
-# Last band is [0.20, 0.30] (inclusive on right)
 BANDS: list[tuple[float, float, int, str]] = [
     (0.00, 0.05, 14, "[0.00,0.05)"),
     (0.05, 0.10,  8, "[0.05,0.10)"),
@@ -53,18 +58,27 @@ BANDS: list[tuple[float, float, int, str]] = [
 ]
 N_TARGET = sum(b[2] for b in BANDS)  # 40
 
-# Element sets for post-filtering binary metal+{B,C,Si} compounds
-_ALKALI = {"Li", "Na", "K", "Rb", "Cs"}
+_ALKALI        = {"Li", "Na", "K", "Rb", "Cs"}
 _ALKALINE_EARTH = {"Be", "Mg", "Ca", "Sr", "Ba"}
-_TRANSITION = {
-    "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn",
-    "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd",
-    "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg",
-    "La", "Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb",
-    "Dy", "Ho", "Er", "Tm", "Yb", "Lu",
+_TRANSITION    = {
+    "Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn",
+    "Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd",
+    "Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg",
+    "La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb",
+    "Dy","Ho","Er","Tm","Yb","Lu",
 }
 _METALS = _ALKALI | _ALKALINE_EARTH | _TRANSITION
 _ANIONS = {"B", "C", "Si"}
+
+_PARTIAL_COLS = [
+    "material_id", "formula", "chemsys",
+    "mp_energy_per_atom_summary", "mp_energy_above_hull_summary",
+    "mp_energy_per_atom_gga", "mp_energy_above_hull_gga",
+    "mp_uncorrected_energy_per_atom",
+    "chgnet_energy_per_atom",
+    "chgnet_hull_corrected", "chgnet_hull_uncorrected",
+    "n_steps", "wall_ms", "error",
+]
 
 
 def _utc_iso() -> str:
@@ -85,11 +99,10 @@ def _band_idx(h: float) -> int:
     elif h < 0.10:  return 1
     elif h < 0.20:  return 2
     elif h <= 0.30: return 3
-    return -1  # outside range
+    return -1
 
 
 def _wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score 95% CI for k successes out of n trials."""
     if n == 0:
         return (float("nan"), float("nan"))
     p = k / n
@@ -101,20 +114,17 @@ def _wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 
 # ---------------------------------------------------------------------------
-# MP cache helpers
+# MP cache helpers — all keys include chemsys + thermo_type
 # ---------------------------------------------------------------------------
 
 def _load_or_fetch_summary(cache_path: Path) -> list[dict]:
-    """Fetch binary metal B/C/Si compounds from MP summary endpoint (cached).
-    Does NOT filter on theoretical (addendum: include theoretical entries)."""
+    """Binary metal B/C/Si compounds from MP summary (cached, no theoretical filter)."""
     if cache_path.exists():
         print(f"  Summary cache hit: {cache_path}")
         return json.loads(cache_path.read_text())
 
     print("  Fetching summary from Materials Project ...")
     from mp_api.client import MPRester
-    from pymatgen.core import Composition
-
     records: list[dict] = []
     with MPRester(api_key=get_api_key()) as mpr:
         for anion in ("B", "C", "Si"):
@@ -151,41 +161,92 @@ def _load_or_fetch_summary(cache_path: Path) -> list[dict]:
     return records
 
 
-def _select_calibration_set(records: list[dict]) -> list[dict]:
+def _load_or_fetch_entries_gga(chemsys: str, cache_dir: Path) -> list[dict]:
     """
-    Deterministic stratified selection per addendum:
-    - Sort within each band by sha256(material_id) ascending.
-    - Skip if chemsys already has 2 selected entries (global cap).
-    - Take up to band's n; report shortfall if fewer available.
+    GGA_GGA+U competing entries for a chemical system (Amendment A).
+    Cache key includes chemsys and thermo_type; old _corr/_uncorr files not reused.
+
+    BUG FIX: composition stored as {str(k): v} to avoid Element-keyed dict
+    JSON serialization failure ("keys must be str, not Element").
+
+    Returns list of dicts: {entry_id, composition, corrected_energy,
+    uncorrected_energy, uncorrected_energy_per_atom}
     """
-    bins: list[list[dict]] = [[] for _ in BANDS]
-    for r in records:
-        i = _band_idx(r["energy_above_hull"])
-        if i >= 0:
-            bins[i].append(r)
+    cache_path = cache_dir / f"{chemsys}_GGA_GGA+U.json"
+    if cache_path.exists():
+        return json.loads(cache_path.read_text())
 
-    selected: list[dict] = []
-    chemsys_count: dict[str, int] = {}  # global 2-per-chemsys cap
+    from mp_api.client import MPRester
+    with MPRester(api_key=get_api_key()) as mpr:
+        entries = mpr.get_entries_in_chemsys(
+            chemsys.split("-"),
+            additional_criteria={"thermo_types": ["GGA_GGA+U"]},
+        )
 
-    print("  Selection (addendum bands):")
-    for i, (lo, hi, n_target, label) in enumerate(BANDS):
-        bin_sorted = sorted(bins[i], key=lambda r: _mat_sha(r["material_id"]))
-        taken = 0
-        for r in bin_sorted:
-            if taken >= n_target:
-                break
-            chemsys = "-".join(sorted(r["elements"]))
-            if chemsys_count.get(chemsys, 0) >= 2:
-                continue
-            selected.append(r)
-            chemsys_count[chemsys] = chemsys_count.get(chemsys, 0) + 1
-            taken += 1
-        shortfall = n_target - taken
-        sf_str = f"  SHORTFALL={shortfall}" if shortfall > 0 else ""
-        print(f"    band {label}: requested={n_target}  available={len(bins[i])}  selected={taken}{sf_str}")
+    records = []
+    for e in entries:
+        # Explicit str() conversion on composition keys — fixes Element-keyed dict bug
+        comp_dict = {str(k): float(v) for k, v in e.composition.items()}
+        n_atoms = e.composition.num_atoms
+        records.append({
+            "entry_id": str(getattr(e, "entry_id", "")),
+            "composition": comp_dict,
+            "corrected_energy": float(e.energy),
+            "uncorrected_energy": float(e.uncorrected_energy),
+            "uncorrected_energy_per_atom": float(e.uncorrected_energy / n_atoms),
+        })
 
-    print(f"  Total selected: {len(selected)}/{N_TARGET}")
-    return selected
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(records))  # all fields are str/float — safe
+    return records
+
+
+def _load_or_fetch_thermo_gt(mat_id: str, gt_cache_dir: Path) -> dict | None:
+    """
+    GGA_GGA+U thermo doc for one material (ground truth: energy_above_hull,
+    energy_per_atom). Returns None if no GGA_GGA+U doc exists.
+    Cache key: {mat_id}_GGA_GGA+U.json
+    """
+    cache_path = gt_cache_dir / f"{mat_id}_GGA_GGA+U.json"
+    if cache_path.exists():
+        return json.loads(cache_path.read_text())  # may be null (json None)
+
+    from mp_api.client import MPRester
+    with MPRester(api_key=get_api_key()) as mpr:
+        docs = mpr.materials.thermo.search(
+            material_ids=[mat_id],
+            thermo_types=["GGA_GGA+U"],
+            fields=["material_id", "energy_above_hull", "energy_per_atom"],
+        )
+
+    if not docs:
+        cache_path.write_text(json.dumps(None))
+        return None
+
+    doc = docs[0]
+    result = {
+        "material_id": doc.material_id,
+        "energy_above_hull": float(doc.energy_above_hull),
+        "energy_per_atom": float(doc.energy_per_atom),
+    }
+    cache_path.write_text(json.dumps(result))
+    return result
+
+
+def _build_ref_entries(
+    gga_records: list[dict],
+    exclude_mat_id: str,
+    corrected: bool,
+) -> list[PDEntry]:
+    """Build PDEntry list for PhaseDiagram, excluding the target material_id."""
+    result = []
+    for r in gga_records:
+        if r["entry_id"] == exclude_mat_id:
+            continue
+        comp = Composition(r["composition"])
+        energy = r["corrected_energy"] if corrected else r["uncorrected_energy"]
+        result.append(PDEntry(comp, energy, name=r["entry_id"]))
+    return result
 
 
 def _load_or_fetch_structure(mat_id: str, cache_dir: Path):
@@ -200,23 +261,38 @@ def _load_or_fetch_structure(mat_id: str, cache_dir: Path):
     return structure
 
 
-def _load_or_fetch_entries(chemsys: str, cache_dir: Path, corrected: bool) -> list:
-    """Fetch and cache all MP ComputedEntry objects for a chemical system."""
-    from pymatgen.entries.computed_entries import ComputedEntry
-    tag = "corr" if corrected else "uncorr"
-    p = cache_dir / f"{chemsys}_{tag}.json"
-    if p.exists():
-        return [ComputedEntry.from_dict(d) for d in json.loads(p.read_text())]
-    from mp_api.client import MPRester
-    with MPRester(api_key=get_api_key()) as mpr:
-        entries = mpr.get_entries_in_chemsys(chemsys.split("-"), compatible_only=corrected)
-    p.write_text(json.dumps([e.as_dict() for e in entries]))
-    return entries
+# ---------------------------------------------------------------------------
+# Selection
+# ---------------------------------------------------------------------------
 
+def _select_calibration_set(records: list[dict]) -> list[dict]:
+    bins: list[list[dict]] = [[] for _ in BANDS]
+    for r in records:
+        i = _band_idx(r["energy_above_hull"])
+        if i >= 0:
+            bins[i].append(r)
 
-def _exclude_target(entries: list, mat_id: str) -> list:
-    """Remove entry with entry_id == mat_id; leave other polymorphs in."""
-    return [e for e in entries if getattr(e, "entry_id", None) != mat_id]
+    selected: list[dict] = []
+    chemsys_count: dict[str, int] = {}
+
+    print("  Selection (addendum bands, sha256 order, 2-per-chemsys cap):")
+    for i, (lo, hi, n_target, label) in enumerate(BANDS):
+        bin_sorted = sorted(bins[i], key=lambda r: _mat_sha(r["material_id"]))
+        taken = 0
+        for r in bin_sorted:
+            if taken >= n_target:
+                break
+            chemsys = "-".join(sorted(r["elements"]))
+            if chemsys_count.get(chemsys, 0) >= 2:
+                continue
+            selected.append(r)
+            chemsys_count[chemsys] = chemsys_count.get(chemsys, 0) + 1
+            taken += 1
+        sf = f"  SHORTFALL={n_target - taken}" if taken < n_target else ""
+        print(f"    band {label}: requested={n_target}  available={len(bins[i])}  selected={taken}{sf}")
+
+    print(f"  Total selected: {len(selected)}/{N_TARGET}")
+    return selected
 
 
 # ---------------------------------------------------------------------------
@@ -226,52 +302,59 @@ def _exclude_target(entries: list, mat_id: str) -> list:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ledger", type=Path, default=LEDGER_DEFAULT)
-    parser.add_argument(
-        "--select-only", action="store_true",
-        help="Fetch and print selection only; do not relax or compute hull.",
-    )
+    parser.add_argument("--select-only", action="store_true",
+                        help="Fetch and print selection only; do not relax.")
     args = parser.parse_args()
 
     init_db(args.ledger)
 
-    # ---- Verify and record addendum ----
-    if not ADDENDUM_PATH.exists():
-        raise FileNotFoundError(f"Addendum not found: {ADDENDUM_PATH}")
-    addendum_bytes = ADDENDUM_PATH.read_bytes()
-    addendum_sha = hashlib.sha256(addendum_bytes).hexdigest()
-    addendum_content = yaml.safe_load(ADDENDUM_PATH.read_text())
-    prereg_hash = record_prereg(addendum_content, path=args.ledger)
-    print(f"Addendum SHA256 (file): {addendum_sha}")
-    print(f"Ledger prereg hash:     {prereg_hash}")
+    # ---- Verify and record addendum + amendment ----
+    for path, label in [(ADDENDUM_PATH, "Addendum"), (AMENDMENT_PATH, "Amendment A")]:
+        if not path.exists():
+            raise FileNotFoundError(f"{label} not found: {path}")
+        content = yaml.safe_load(path.read_text())
+        ph = record_prereg(content, path=args.ledger)
+        sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        print(f"{label} SHA256: {sha}  ledger hash: {ph}")
 
-    # ---- Fetch summary ----
+    # ---- Fetch summary + select ----
     records = _load_or_fetch_summary(RAW_DIR / "mp_calib_summary.json")
     print(f"  Total qualifying records: {len(records)}")
     selected = _select_calibration_set(records)
 
-    # ---- --select-only: print and exit ----
     if args.select_only:
-        print(f"\n{'='*68}")
-        print(f"  Selected {len(selected)} entries (--select-only; no relaxation run)")
+        print(f"\n{'='*70}")
         print(f"  {'material_id':<15}  {'formula':<12}  {'chemsys':<8}  {'mp_hull':>7}")
         for r in selected:
-            chemsys = "-".join(sorted(r["elements"]))
-            print(f"  {r['material_id']:<15}  {r['formula']:<12}  {chemsys:<8}  {r['energy_above_hull']:>7.4f}")
-        print(f"{'='*68}")
+            cs = "-".join(sorted(r["elements"]))
+            print(f"  {r['material_id']:<15}  {r['formula']:<12}  {cs:<8}  {r['energy_above_hull']:>7.4f}")
+        print(f"{'='*70}")
         return
 
     # ---- Cache directories ----
     struct_cache = RAW_DIR / "mp_calib_structures"
-    hull_cache = RAW_DIR / "mp_calib_hull_entries"
-    struct_cache.mkdir(parents=True, exist_ok=True)
-    hull_cache.mkdir(parents=True, exist_ok=True)
+    hull_cache   = RAW_DIR / "mp_calib_hull_entries"
+    gt_cache     = RAW_DIR / "mp_calib_gt"
+    for d in (struct_cache, hull_cache, gt_cache):
+        d.mkdir(parents=True, exist_ok=True)
+
+    # ---- Partial CSV: load existing, build skip set ----
+    partial_path = REPORTS_DIR / "stability_calibration_partial.csv"
+    REPORTS_DIR.mkdir(exist_ok=True)
+    rows: list[dict] = []
+    processed_ids: set[str] = set()
+    if partial_path.exists():
+        existing = pd.read_csv(partial_path).to_dict("records")
+        rows = existing
+        processed_ids = {r["material_id"] for r in existing}
+        print(f"  Partial CSV: {len(processed_ids)} already processed, skipping.")
 
     # ---- Ledger run ----
     t_start = _utc_iso()
     wall_t0 = time.time()
     run_id = record_run(
         tool="stability_calibration",
-        tool_version="chgnet+pymatgen",
+        tool_version="chgnet+pymatgen+GGA_GGA+U",
         model_checkpoint="CHGNet-default",
         seed=None,
         hardware=f"{platform.node()} {platform.processor()}",
@@ -280,66 +363,109 @@ def main() -> None:
     )
     print(f"Ledger run_id={run_id}")
 
-    # ---- Run calibration ----
-    rows: list[dict] = []
-    mat_ids_used: list[str] = []
+    excluded_no_gt: list[str] = []
 
     for rec in selected:
-        mat_id = rec["material_id"]
+        mat_id  = rec["material_id"]
         formula = rec["formula"]
-        mp_epa = rec["energy_per_atom"]
-        mp_epa_uncorr = rec.get("uncorrected_energy_per_atom")
-        mp_hull = rec["energy_above_hull"]
         chemsys = "-".join(sorted(rec["elements"]))
 
-        print(f"  {mat_id} ({formula:12s}) mp_hull={mp_hull:.3f}", end="  ", flush=True)
+        if mat_id in processed_ids:
+            print(f"  Skipping {mat_id} (in partial CSV)")
+            continue
 
+        mp_epa_summary  = rec["energy_per_atom"]
+        mp_hull_summary = rec["energy_above_hull"]
+
+        print(f"  {mat_id} ({formula:12s}) summary_hull={mp_hull_summary:.3f}", end="  ", flush=True)
+
+        # Ground truth from GGA_GGA+U thermo doc
+        gt = _load_or_fetch_thermo_gt(mat_id, gt_cache)
+        if gt is None:
+            print(f"EXCLUDED: no GGA_GGA+U thermo doc")
+            excluded_no_gt.append(f"{mat_id} ({formula})")
+            row = _make_row(rec, chemsys, error="no_GGA_GGA+U_thermo_doc")
+            _append_partial(row, partial_path)
+            rows.append(row)
+            continue
+
+        mp_epa_gga  = gt["energy_per_atom"]
+        mp_hull_gga = gt["energy_above_hull"]
+
+        # GGA_GGA+U competing entries (used for hull and uncorrected epa)
+        try:
+            gga_records = _load_or_fetch_entries_gga(chemsys, hull_cache)
+        except Exception as exc:
+            print(f"ENTRIES_FAIL: {exc}")
+            row = _make_row(rec, chemsys, mp_epa_gga=mp_epa_gga,
+                            mp_hull_gga=mp_hull_gga, error=str(exc))
+            _append_partial(row, partial_path)
+            rows.append(row)
+            continue
+
+        # Uncorrected energy per atom for metric (a), from the same GGA_GGA+U entries
+        target_entry = next((r for r in gga_records if r["entry_id"] == mat_id), None)
+        mp_uncorr_epa = target_entry["uncorrected_energy_per_atom"] if target_entry else None
+
+        # Structure
         try:
             structure = _load_or_fetch_structure(mat_id, struct_cache)
         except Exception as exc:
             print(f"STRUCT_FAIL: {exc}")
-            rows.append(_fail_row(rec, str(exc)))
+            row = _make_row(rec, chemsys, mp_epa_gga=mp_epa_gga,
+                            mp_hull_gga=mp_hull_gga,
+                            mp_uncorr_epa=mp_uncorr_epa, error=str(exc))
+            _append_partial(row, partial_path)
+            rows.append(row)
             continue
 
+        # CHGNet relax
         res = relax_structure(structure)
         if res["error"]:
             print(f"RELAX_FAIL: {res['error']}")
-            rows.append(_fail_row(rec, res["error"], wall_ms=res["wall_ms"]))
+            row = _make_row(rec, chemsys, mp_epa_gga=mp_epa_gga,
+                            mp_hull_gga=mp_hull_gga,
+                            mp_uncorr_epa=mp_uncorr_epa,
+                            wall_ms=res["wall_ms"], error=res["error"])
+            _append_partial(row, partial_path)
+            rows.append(row)
             continue
 
         chgnet_epa = res["energy_per_atom"]
-        relaxed = res["relaxed_structure"]
+        relaxed    = res["relaxed_structure"]
 
-        # Leave-one-out hull (exclude this material_id from reference)
+        # Leave-one-out hull: corrected reference
         hull_corr: float | None = None
         try:
-            entries_corr = _load_or_fetch_entries(chemsys, hull_cache, corrected=True)
-            ref_corr = _exclude_target(entries_corr, mat_id)
+            ref_corr = _build_ref_entries(gga_records, mat_id, corrected=True)
             hull_corr = e_above_hull(chgnet_epa, relaxed, ref_corr)
         except Exception as exc:
             print(f"HULL_CORR_FAIL:{exc}", end="  ")
 
+        # Leave-one-out hull: uncorrected reference (same entries, raw energies)
         hull_uncorr: float | None = None
         try:
-            entries_uncorr = _load_or_fetch_entries(chemsys, hull_cache, corrected=False)
-            ref_uncorr = _exclude_target(entries_uncorr, mat_id)
+            ref_uncorr = _build_ref_entries(gga_records, mat_id, corrected=False)
             hull_uncorr = e_above_hull(chgnet_epa, relaxed, ref_uncorr)
         except Exception as exc:
             print(f"HULL_UNCORR_FAIL:{exc}", end="  ")
 
         print(f"chgnet_epa={chgnet_epa:.3f}  hull_c={hull_corr}  steps={res['n_steps']}")
 
-        rows.append({
+        row = {
             "material_id": mat_id, "formula": formula, "chemsys": chemsys,
-            "mp_energy_per_atom": mp_epa,
-            "mp_uncorrected_energy_per_atom": mp_epa_uncorr,
-            "mp_energy_above_hull": mp_hull,
+            "mp_energy_per_atom_summary": mp_epa_summary,
+            "mp_energy_above_hull_summary": mp_hull_summary,
+            "mp_energy_per_atom_gga": mp_epa_gga,
+            "mp_energy_above_hull_gga": mp_hull_gga,
+            "mp_uncorrected_energy_per_atom": mp_uncorr_epa,
             "chgnet_energy_per_atom": chgnet_epa,
             "chgnet_hull_corrected": hull_corr,
             "chgnet_hull_uncorrected": hull_uncorr,
             "n_steps": res["n_steps"], "wall_ms": res["wall_ms"], "error": None,
-        })
-        mat_ids_used.append(mat_id)
+        }
+        _append_partial(row, partial_path)
+        rows.append(row)
 
         record_result(run_id, None, 1, f"chgnet_epa:{mat_id}", chgnet_epa, path=args.ledger)
         if hull_corr is not None:
@@ -349,27 +475,27 @@ def main() -> None:
     wall_ms_total = (time.time() - wall_t0) * 1000
     record_timing("stability_calibration", t_start, t_end, path=args.ledger)
 
-    # ---- Metrics ----
-    ok = [r for r in rows if r["error"] is None]
+    if excluded_no_gt:
+        print(f"\n  Excluded (no GGA_GGA+U thermo doc): {excluded_no_gt}")
+
+    # ---- Metrics (only successful rows) ----
+    ok = [r for r in rows if not r.get("error")]
     n_ok, n_fail = len(ok), len(rows) - len(ok)
     if n_fail:
-        failed_ids = [r["material_id"] for r in rows if r["error"]]
-        print(f"\n  {n_fail} failed: {failed_ids}")
+        print(f"\n  {n_fail} failed/excluded (see partial CSV)")
     if n_ok == 0:
         print("No successful relaxations. Exiting.")
         return
 
-    mp_epa_arr    = np.array([r["mp_energy_per_atom"] for r in ok], dtype=float)
-    mp_epa_u_arr  = np.array([r["mp_uncorrected_energy_per_atom"] or float("nan") for r in ok], dtype=float)
-    mp_hull_arr   = np.array([r["mp_energy_above_hull"] for r in ok], dtype=float)
+    mp_epa_arr     = np.array([r["mp_energy_per_atom_gga"] for r in ok], dtype=float)
+    mp_epa_u_arr   = np.array([r["mp_uncorrected_energy_per_atom"] or float("nan") for r in ok], dtype=float)
+    mp_hull_arr    = np.array([r["mp_energy_above_hull_gga"] for r in ok], dtype=float)
     chgnet_epa_arr = np.array([r["chgnet_energy_per_atom"] for r in ok], dtype=float)
 
-    # (a) Energy/atom MAE
     mae_epa_corr   = float(np.nanmean(np.abs(chgnet_epa_arr - mp_epa_arr)))
     mae_epa_uncorr = float(np.nanmean(np.abs(chgnet_epa_arr - mp_epa_u_arr)))
-    better_epa = "corrected" if mae_epa_corr <= mae_epa_uncorr else "uncorrected"
+    better_epa     = "corrected" if mae_epa_corr <= mae_epa_uncorr else "uncorrected"
 
-    # (b) Hull MAE
     def _hull_mae(key: str) -> float:
         pred = np.array([r[key] if r[key] is not None else float("nan") for r in ok], dtype=float)
         valid = ~np.isnan(pred)
@@ -377,21 +503,19 @@ def main() -> None:
 
     mae_hull_corr   = _hull_mae("chgnet_hull_corrected")
     mae_hull_uncorr = _hull_mae("chgnet_hull_uncorrected")
-
     valid_maes = [x for x in [mae_hull_corr, mae_hull_uncorr] if not np.isnan(x)]
     best_hull_mae = min(valid_maes) if valid_maes else float("nan")
-    frozen_convention = "corrected" if (np.isnan(mae_hull_uncorr) or mae_hull_corr <= mae_hull_uncorr) else "uncorrected"
+    frozen = "corrected" if (np.isnan(mae_hull_uncorr) or mae_hull_corr <= mae_hull_uncorr) else "uncorrected"
 
-    # (c) Stability classification at 0.05 eV/atom
     THRESHOLD = 0.05
     pred_hull = np.array([
         r["chgnet_hull_corrected"] if r["chgnet_hull_corrected"] is not None
         else r["chgnet_hull_uncorrected"]
         for r in ok
     ], dtype=float)
-    pred_pos = pred_hull <= THRESHOLD
-    true_pos = mp_hull_arr <= THRESHOLD
-    n_stable = int(true_pos.sum())
+    pred_pos  = pred_hull <= THRESHOLD
+    true_pos  = mp_hull_arr <= THRESHOLD
+    n_stable  = int(true_pos.sum())
 
     tp = int((pred_pos & true_pos).sum())
     fp = int((pred_pos & ~true_pos).sum())
@@ -401,20 +525,11 @@ def main() -> None:
     recall    = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
     prec_ci   = _wilson_ci(tp, tp + fp)
     rec_ci    = _wilson_ci(tp, tp + fn)
+    recall_indet = n_stable < 10
 
-    # Indeterminate recall if < 10 stable entries
-    recall_indeterminate = n_stable < 10
-
-    # Verdict
-    if recall_indeterminate:
-        usable = best_hull_mae <= 0.06  # recall criterion skipped
-        verdict_recall = "INDETERMINATE (n_stable < 10)"
-    else:
-        usable = best_hull_mae <= 0.06 and recall >= 0.80
-        verdict_recall = f"{recall:.3f}"
+    usable = best_hull_mae <= 0.06 and (recall_indet or recall >= 0.80)
     verdict = "USABLE" if usable else "NOT USABLE AS-IS"
 
-    # ---- Ledger summary ----
     for metric, val in [
         ("mae_epa_vs_corrected",    mae_epa_corr),
         ("mae_epa_vs_uncorrected",  mae_epa_uncorr),
@@ -426,84 +541,89 @@ def main() -> None:
         if not np.isnan(val):
             record_result(run_id, None, 1, metric, val, path=args.ledger)
 
-    # ---- Write reports ----
-    REPORTS_DIR.mkdir(exist_ok=True)
+    json_path = REPORTS_DIR / "stability_calibration.json"
+    csv_path  = REPORTS_DIR / "stability_calibration.csv"
     report = {
         "run_id": run_id,
-        "addendum_sha256": addendum_sha,
         "n_selected": len(selected),
         "n_successful": n_ok,
         "n_failed": n_fail,
-        "material_ids_used": mat_ids_used,
+        "excluded_no_gt": excluded_no_gt,
+        "material_ids_used": [r["material_id"] for r in ok],
         "metrics": {
             "a_energy_per_atom_mae": {
-                "vs_corrected_eV_per_atom": mae_epa_corr,
-                "vs_uncorrected_eV_per_atom": mae_epa_uncorr,
+                "vs_gga_corrected": mae_epa_corr,
+                "vs_gga_uncorrected": mae_epa_uncorr,
                 "better_agreement": better_epa,
             },
             "b_hull_mae": {
-                "corrected_ref_eV_per_atom": mae_hull_corr,
-                "uncorrected_ref_eV_per_atom": mae_hull_uncorr,
-                "frozen_convention": frozen_convention,
+                "corrected_ref": mae_hull_corr,
+                "uncorrected_ref": mae_hull_uncorr,
+                "frozen_convention": frozen,
             },
             "c_stability_classification_at_0.05": {
                 "n_stable_mp": n_stable,
                 "tp": tp, "fp": fp, "tn": tn, "fn": fn,
-                "precision": precision,
-                "precision_wilson_ci_95": prec_ci,
-                "recall": recall,
-                "recall_wilson_ci_95": rec_ci,
-                "recall_indeterminate": recall_indeterminate,
+                "precision": precision, "precision_wilson_ci_95": prec_ci,
+                "recall": recall, "recall_wilson_ci_95": rec_ci,
+                "recall_indeterminate": recall_indet,
             },
         },
         "verdict": {
-            "usable": usable,
-            "message": verdict,
-            "best_hull_mae": best_hull_mae,
-            "frozen_convention": frozen_convention,
-            "recall": recall,
-            "recall_indeterminate": recall_indeterminate,
+            "usable": usable, "message": verdict,
+            "best_hull_mae": best_hull_mae, "frozen_convention": frozen,
+            "recall": recall, "recall_indeterminate": recall_indet,
             "thresholds": {"hull_mae": 0.06, "recall": 0.80},
         },
         "wall_ms_total": wall_ms_total,
     }
-    json_path = REPORTS_DIR / "stability_calibration.json"
-    csv_path  = REPORTS_DIR / "stability_calibration.csv"
     with open(json_path, "w") as f:
         json.dump(report, f, indent=2)
     pd.DataFrame(rows).to_csv(csv_path, index=False)
 
-    # ---- Print compact table ----
     print(f"\n{'='*64}")
     print(f"  Stability Calibration  run_id={run_id}  n={n_ok}/{len(selected)}")
     print(f"{'='*64}")
-    print(f"  (a) Energy/atom MAE vs corrected MP:   {mae_epa_corr:.4f} eV/atom")
-    print(f"      Energy/atom MAE vs uncorrected MP:  {mae_epa_uncorr:.4f} eV/atom")
+    print(f"  (a) Energy/atom MAE vs GGA corrected:   {mae_epa_corr:.4f} eV/atom")
+    print(f"      Energy/atom MAE vs GGA uncorrected:  {mae_epa_uncorr:.4f} eV/atom")
     print(f"      Better agreement: {better_epa}")
     print(f"  (b) Hull MAE (corrected ref):   {mae_hull_corr:.4f} eV/atom")
     print(f"      Hull MAE (uncorrected ref):  {mae_hull_uncorr:.4f} eV/atom")
-    print(f"      *** FROZEN convention: {frozen_convention} (lower hull MAE) ***")
-    print(f"  (c) n_stable(MP)={n_stable}  @ threshold 0.05 eV/atom:")
+    print(f"      *** FROZEN convention: {frozen} (lower hull MAE) ***")
+    print(f"  (c) n_stable(MP_GGA)={n_stable}  @ threshold 0.05 eV/atom:")
     print(f"      precision={precision:.3f}  Wilson95=[{prec_ci[0]:.3f},{prec_ci[1]:.3f}]")
-    if recall_indeterminate:
+    if recall_indet:
         print(f"      recall=INDETERMINATE (n_stable={n_stable} < 10)")
     else:
         print(f"      recall={recall:.3f}  Wilson95=[{rec_ci[0]:.3f},{rec_ci[1]:.3f}]")
     print(f"      Confusion: TP={tp}  FP={fp}  TN={tn}  FN={fn}")
     print(f"\n  Verdict: {verdict}")
-    if not usable:
-        print(f"  (hull_MAE={best_hull_mae:.4f}, recall={verdict_recall})")
-    print(f"  Reports: {json_path}, {csv_path}")
+    print(f"  Reports: {json_path}, {csv_path}, {partial_path}")
     print(f"{'='*64}\n")
 
 
-def _fail_row(rec: dict, error: str, wall_ms: float | None = None) -> dict:
+def _append_partial(row: dict, path: Path) -> None:
+    """Append one row to partial CSV immediately (header only if new file)."""
+    df = pd.DataFrame([{c: row.get(c) for c in _PARTIAL_COLS}])
+    df.to_csv(path, mode="a", header=not path.exists(), index=False)
+
+
+def _make_row(
+    rec: dict,
+    chemsys: str,
+    mp_epa_gga: float | None = None,
+    mp_hull_gga: float | None = None,
+    mp_uncorr_epa: float | None = None,
+    wall_ms: float | None = None,
+    error: str | None = None,
+) -> dict:
     return {
-        "material_id": rec["material_id"], "formula": rec["formula"],
-        "chemsys": "-".join(sorted(rec["elements"])),
-        "mp_energy_per_atom": rec["energy_per_atom"],
-        "mp_uncorrected_energy_per_atom": rec.get("uncorrected_energy_per_atom"),
-        "mp_energy_above_hull": rec["energy_above_hull"],
+        "material_id": rec["material_id"], "formula": rec["formula"], "chemsys": chemsys,
+        "mp_energy_per_atom_summary": rec["energy_per_atom"],
+        "mp_energy_above_hull_summary": rec["energy_above_hull"],
+        "mp_energy_per_atom_gga": mp_epa_gga,
+        "mp_energy_above_hull_gga": mp_hull_gga,
+        "mp_uncorrected_energy_per_atom": mp_uncorr_epa,
         "chgnet_energy_per_atom": None, "chgnet_hull_corrected": None,
         "chgnet_hull_uncorrected": None, "n_steps": None,
         "wall_ms": wall_ms, "error": error,

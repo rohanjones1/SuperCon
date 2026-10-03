@@ -123,3 +123,42 @@ def test_above_hull_returns_correct_distance():
         f"Expected {expected_distance:.4f}, got {e:.4f}"
     )
     assert e > 0.0
+
+
+# ---------------------------------------------------------------------------
+# (d) JSON serialization of Element-keyed dicts — Amendment A bug fix
+# ---------------------------------------------------------------------------
+
+def test_element_keyed_dict_json_serializable_with_str_fix():
+    """
+    Reproduce the HULL_UNCORR_FAIL bug: a dict with pymatgen Element keys
+    fails json.dumps without a fix.  The fix used in calibrate_stability.py is
+    {str(k): v for k, v in e.composition.items()}, equivalent to default=str.
+
+    This test verifies:
+    (i)  bare json.dumps raises TypeError on Element-keyed dicts,
+    (ii) using default=str (or explicit str() conversion) produces valid JSON
+         with element symbols as string keys.
+    """
+    import json
+    from pymatgen.core import Element
+
+    element_dict = {Element("Mg"): 1.0, Element("B"): 2.0}
+
+    # Without fix: TypeError
+    with pytest.raises(TypeError, match="not JSON serializable|keys must be"):
+        json.dumps(element_dict)
+
+    # default=str does NOT fix non-serializable keys (only values) — same error
+    with pytest.raises(TypeError):
+        json.dumps(element_dict, default=str)
+
+    # The only working fix: explicit str() conversion of keys before serializing
+    # This is exactly what _load_or_fetch_entries_gga does:
+    #   {str(k): float(v) for k, v in e.composition.items()}
+    fixed = {str(k): v for k, v in element_dict.items()}
+    serialized = json.dumps(fixed)
+    parsed = json.loads(serialized)
+    assert set(parsed.keys()) == {"Mg", "B"}
+    assert parsed["Mg"] == pytest.approx(1.0)
+    assert parsed["B"]  == pytest.approx(2.0)

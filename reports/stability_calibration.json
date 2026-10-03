@@ -1,0 +1,93 @@
+{
+  "run_id": 3,
+  "n_selected": 40,
+  "n_successful": 39,
+  "n_failed": 1,
+  "excluded_no_gt": [
+    "mp-1187971 (Yb3Si)"
+  ],
+  "material_ids_used": [
+    "mp-1010",
+    "mp-2582",
+    "mp-11192",
+    "mp-1232339",
+    "mp-9969",
+    "mp-568646",
+    "mp-7948",
+    "mp-1079437",
+    "mp-1199486",
+    "mp-28731",
+    "mp-567164",
+    "mp-542465",
+    "mp-1214755",
+    "mp-1198133",
+    "mp-541840",
+    "mp-21502",
+    "mp-1752",
+    "mp-1432",
+    "mp-999192",
+    "mp-1095177",
+    "mp-993",
+    "mp-313",
+    "mp-13052",
+    "mp-1075796",
+    "mp-1100455",
+    "mp-1087230",
+    "mp-976593",
+    "mp-542709",
+    "mp-1187005",
+    "mp-999120",
+    "mp-1187936",
+    "mp-579",
+    "mp-973668",
+    "mp-1238834",
+    "mp-1224874",
+    "mp-1220588",
+    "mp-1001602",
+    "mp-581000",
+    "mp-1183407"
+  ],
+  "metrics": {
+    "a_energy_per_atom_mae": {
+      "vs_gga_corrected": 0.03866998386978379,
+      "vs_gga_uncorrected": NaN,
+      "better_agreement": "uncorrected"
+    },
+    "b_hull_mae": {
+      "corrected_ref": 0.038261201839521454,
+      "uncorrected_ref": 0.04265947657208065,
+      "frozen_convention": "corrected"
+    },
+    "c_stability_classification_at_0.05": {
+      "n_stable_mp": 15,
+      "tp": 10,
+      "fp": 2,
+      "tn": 22,
+      "fn": 5,
+      "precision": 0.8333333333333334,
+      "precision_wilson_ci_95": [
+        0.5519636426153274,
+        0.9530358523851776
+      ],
+      "recall": 0.6666666666666666,
+      "recall_wilson_ci_95": [
+        0.41713125151212976,
+        0.8482389930530876
+      ],
+      "recall_indeterminate": false
+    }
+  },
+  "verdict": {
+    "usable": false,
+    "message": "NOT USABLE AS-IS",
+    "best_hull_mae": 0.038261201839521454,
+    "frozen_convention": "corrected",
+    "recall": 0.6666666666666666,
+    "recall_indeterminate": false,
+    "thresholds": {
+      "hull_mae": 0.06,
+      "recall": 0.8
+    }
+  },
+  "wall_ms_total": 339041.41879081726
+}
