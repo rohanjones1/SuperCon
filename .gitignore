@@ -1,0 +1,19 @@
+# secrets
+.env
+.env.*
+
+# python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# data and run artifacts (large)
+data/raw/
+data/processed/
+experiments/runs/
+*.sqlite
+*.db
+
+# claude code local state
+.claude/worktrees/

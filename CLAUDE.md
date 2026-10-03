@@ -10,6 +10,21 @@ Judging: 30% Omnigent orchestration, 25% breakthrough potential, 20% discovery a
 Submission: repo, agent specs and policies, 2-minute demo, cited evidence, experiment code and results,
 measured improvement, next experiment.
 
+## OPERATING PROTOCOL (highest priority, overrides everything below)
+A previous session wasted money by looping on shell commands. These rules prevent that.
+1. **The human runs all terminal commands.** You write and edit files, then give the exact command(s) for the human to run
+   and wait for the pasted output. Do not run installs, clones, tests, servers, or network calls yourself.
+2. **Interactive tools are human-only** (`omnigent` TUI/web UI, logins, anything that waits for input).
+3. **One milestone per session** (see `docs/MILESTONES.md`). Stop at that milestone's "Done when" and report. Do not start the next one.
+4. **No retry loops.** If the human pastes an error: explain the likely cause in at most 5 lines, propose ONE fix, and wait.
+   Never try a second fix without new output from the human.
+5. **Prefer one check script over many commands.** Write a single script that checks many things and prints a compact
+   PASS/FAIL summary, rather than suggesting many separate commands.
+6. **Cost guard:** if a task needs more than about 5 tool calls, stop and ask first. Do not read large files or whole repos
+   speculatively; read only what the milestone names.
+7. **Do not guess APIs.** If you need an Omnigent or library detail, ask the human to paste the relevant doc section or error.
+8. At the end of each milestone, update `docs/STATUS.md` (what works, what's next, open issues) in under 15 lines.
+
 ## Working scientific question
 Can a multi-fidelity agentic screen find ambient-pressure conventional superconductor candidates at lower compute
 cost per validated hit than non-agentic baselines, without losing recall?
@@ -60,7 +75,8 @@ tests/
 - **Python 3.12+** (Omnigent requires it; the original blueprint's "3.10+" is wrong). Use `uv`.
 - Libs: pymatgen, **mp-api** (the new MP client; legacy `pymatgen.ext.matproj` is deprecated), chgnet, ase, phonopy,
   matminer, scikit-learn, jarvis-tools, pandas, numpy, sqlite3.
-- Env vars: `MP_API_KEY`, model credentials via `omnigent setup`.
+- Env vars: `MAT_PROJECT_API` holds the Materials Project key. mp-api's own default name is `MP_API_KEY`, so read
+  `MAT_PROJECT_API` in one helper (`lab/config.py`) and pass `api_key=` explicitly everywhere. Model credentials via `omnigent setup`.
 - Check chgnet/pymatgen compatibility with Python 3.12 and a current torch early (see Plan hour 0).
 
 ## Known pitfalls (do not repeat)
@@ -77,8 +93,8 @@ tests/
 - Dedupe with `StructureMatcher` and `reduced_formula`, not raw `formula`.
 
 ## How to work (Claude Code behavior)
-- Work in **small verified steps**. After each module, run a tiny test, then commit.
-- **Smoke-test integrations before building on them** (Omnigent hello-world, MP key, CHGNet inference).
+- Work in **small verified steps**. After each module, give the human the exact test command to run (you do not run it).
+- **Smoke-test integrations before building on them**, one at a time, per `docs/MILESTONES.md`.
 - Fix seeds. Log tool and model versions, hardware, and wall-clock for every run.
 - Prefer boring, working code over clever code. The clock is hard: respect the cut-lines in `docs/PLAN_16H.md`.
 - When uncertain about a scientific or API fact, **write it to `docs/DECISIONS.md` as an open question** and

@@ -1,0 +1,24 @@
+[project]
+name = "supercon-agentic-lab"
+version = "0.1.0"
+description = "Omnigent-orchestrated agentic screen for ambient-pressure conventional superconductors"
+requires-python = ">=3.12"
+dependencies = [
+    "pymatgen",
+    "mp-api",
+    "chgnet",
+    "ase",
+    "phonopy",
+    "matminer",
+    "scikit-learn",
+    "jarvis-tools",
+    "pandas",
+    "numpy",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+# Science core is run from the repo, not installed as a package (for now).
+package = false

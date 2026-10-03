@@ -3,7 +3,8 @@ Format: ID | status | decision / default | rationale | owner. Claude Code: appen
 
 | ID | Status | Decision / default | Rationale |
 |---|---|---|---|
-| D1 | **PENDING (human)** | Material class: conventional ambient-pressure superconductors; default family = borides/carbides/silicides/simple intermetallics | Valid for DFT/phonon methods; data exists; sets seeds, Tc-proxy training set, holdout design |
+| D9 | accepted | MP key env var is `MAT_PROJECT_API` (pass explicitly to mp-api) | User's setup; mp-api default is MP_API_KEY |
+| D1 | **ACCEPTED** | Material class: conventional ambient-pressure superconductors; default family = borides/carbides/silicides/simple intermetallics | Valid for DFT/phonon methods; data exists; sets seeds, Tc-proxy training set, holdout design |
 | D2 | default | Stability = relaxed CHGNet energy -> E_above_hull vs MP competing phases; threshold 0.05 eV/atom (pre-register) | Raw `e < 0` is meaningless |
 | D3 | default | T2 = no real DFT unless time allows; calibration via candidates matching existing MP/OQMD entries | Free ground truth without DFT cost |
 | D4 | default | Tc proxy is a **stretch** ranking signal only; cut at hour 6 if behind | Weak generalization; do not overinvest |
