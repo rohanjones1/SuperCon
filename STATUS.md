@@ -1,12 +1,12 @@
 # Status
-- Current milestone: **M2d complete** (pending pytest + build_dataset)
-- M0-M2c all PASS. M2d: added deterministic grouped 5-fold CV.
-- New functions: assign_folds (greedy size-balanced, no randomness), assert_fold_integrity.
-- Tests: 13 total (6 old + 4 fold + 3 M2c). All expected to pass.
-- draft_001.yaml updated: primary design = grouped 5-fold CV, cluster bootstrap, sensitivity analyses.
-- deviation_note added: first split overshot to ~35.5%; replaced with folds before any model trained.
-- Decisions added: D15 (folds primary, split descriptive only).
-- seeds.csv will gain fold column (0-4); SHA256 changes after build_dataset re-run.
-- Next: run pytest tests/test_data.py, then build_dataset.py, then lock_prereg.py.
-- After M2 confirmed: M3 = composition Tc proxy (train 4 folds, predict 1, pool AUROC vs B0/B1).
-- Open: D6 (two model vendors) still pending; structures.json is large, confirm disk space.
+- Current milestone: **M3 written** (pending pytest + run_arm_a.py)
+- M0-M2d all PASS. M3: Arm A pre-registered benchmark files written.
+- New files: lab/features.py, lab/benchmark.py, scripts/run_arm_a.py, tests/test_benchmark.py.
+- Features: 46 composition-only (9 props × 5 stats + nelements), pymatgen Element.
+- Benchmark: 5-fold grouped CV, RF(500,msl=3,balanced_subsample,seed=0), cluster bootstrap 1000.
+- Baselines: B0 (random seed=0), B1 (1/mean_atomic_mass, no training).
+- RERUN detection in run_arm_a.py; ledger records aggregate metrics + timing.
+- Reports written to reports/arm_a_results_run{id}.json + arm_a_oof_scores_run{id}.csv.
+- Next: run pytest tests/test_benchmark.py, then uv run python scripts/run_arm_a.py.
+- After M3 confirmed: M4 = stability engine (CHGNet relax + E_above_hull via MP hull).
+- Open: D6 (two model vendors) pending; structures.json disk space.
