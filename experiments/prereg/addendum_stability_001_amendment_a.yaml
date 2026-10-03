@@ -1,0 +1,16 @@
+amends: addendum_stability_001.yaml
+status: written BEFORE any comparison metric was computed or viewed.
+reason: >
+  A first run (ledger run_id=2) was aborted after 8 of 40 compounds completed because (1) the uncorrected
+  hull failed for every compound due to a code bug (Element-keyed dict serialized to JSON), and (2) mp-api
+  warned that the default hull now mixes GGA/GGA+U with r2SCAN entries, which is invalid for phase diagrams
+  on one energy scale and inconsistent with CHGNet's GGA/GGA+U training data. Only raw CHGNet energies were
+  visible; no comparison to MP values, MAE or classification result was computed or seen.
+changes:
+  - "Competing phases and ground truth use thermo_type GGA_GGA+U only."
+  - "Ground-truth E_hull = energy_above_hull from the GGA_GGA+U thermo document (summary value also recorded, not used for metrics)."
+  - "Uncorrected convention = uncorrected_energy_per_atom of the same GGA_GGA+U entries (no separate fetch)."
+  - "Compounds with no GGA_GGA+U thermo document are excluded and listed."
+unchanged: "selection ids and bands, thresholds, usability rule, limitations, no-tuning rule."
+aborted_run:
+  { ledger_run_id: 2, compounds_completed: 8, metrics_computed: none }
