@@ -1,0 +1,25 @@
+{
+  "screening_cutoff_ev_per_atom": 0.0585322711221589,
+  "ground_truth_threshold_ev_per_atom": 0.05,
+  "frozen_convention": "corrected",
+  "calibration_run_id": 3,
+  "recall_at_cutoff": 0.8,
+  "precision_at_cutoff": 0.75,
+  "recall_wilson_ci_95": [
+    0.5481406466534955,
+    0.9295257935638959
+  ],
+  "precision_wilson_ci_95": [
+    0.5050123107060135,
+    0.8981809801576265
+  ],
+  "tp": 12,
+  "fp": 4,
+  "fn": 3,
+  "tn": 20,
+  "n_stable_gt": 15,
+  "n_unstable_gt": 24,
+  "recall_target": 0.8,
+  "recall_target_met": true,
+  "note": "screening_cutoff_ev_per_atom is the CHGNet operational triage threshold \u2014 a calibrated approximation to the MP hull. ground_truth_threshold_ev_per_atom (0.05 eV/atom) is the MP GGA/GGA+U DFT definition and is NOT replaced or approximated by this cutoff."
+}
