@@ -13,6 +13,13 @@ Format: ID | status | decision / default | rationale | owner. Claude Code: appen
 | D7 | default | Python 3.12, `uv`, SQLite ledger | Omnigent needs 3.12+ |
 | D8 | default | Headline metric = cost per validated hit at fixed recall vs B0/B1 at matched budget | Measurable, honest |
 
+| D10 | **ACCEPTED** | JARVIS supercon_3d Tc values are **computed reference labels** (DFPT + Allen-Dynes). Column name `ref_tc`. Do NOT call them T1 experimental claims. | Corrected before any result is logged. |
+| D11 | **ACCEPTED** | Benchmark negatives = JARVIS low-ref_tc entries. Materials Project is NOT used for decoys; MP is used in M3 only for hull / competing phases. | Keeps sources clean and avoids MP in-distribution leakage for novelty. |
+| D12 | **ACCEPTED** | Simple composition-based Tc proxy (Allen-Dynes with empirical lambda from composition features) promoted from stretch to **core**; phonon check is the first cut-line item in PLAN_16H.md. | Proxy needed for B1 baseline and Hypothesis agent scoring. Phonon is expensive; demote if behind schedule. |
+| D13 | **ACCEPTED** | Split unit = `group_id` (union-find: rows sharing `prototype_key` OR `formula` merged into same component). `assert_no_leakage` checks both. | Prevents composition leakage from polymorphs with different spacegroups. |
+| D14 | **ACCEPTED** | Milestone order changed: M3 = Tc proxy + Arm A benchmark (AUROC vs B0/B1 on holdout); M4 = stability engine (CHGNet relax + E_above_hull). | Proxy result is faster to get and directly tests H1/H2 pre-registered hypotheses. |
+| D15 | **ACCEPTED** | Primary analysis = grouped 5-fold CV with cluster bootstrap over group_id; fixed split (seed 42, ~35.5% holdout) is descriptive only. Split overshot target before any model was trained. | Grouped folds use all data for training and evaluation, avoid leakage, and give better CI estimates than a single held-out set. |
+
 ## Open questions (fill in answers from reading the Omnigent repo)
 - Parallel sub-agents? Result handoff format?
 - Custom policy handler for approval gate on `release_candidate`?
@@ -20,4 +27,4 @@ Format: ID | status | decision / default | rationale | owner. Claude Code: appen
 - Headless/scripted `omnigent run` and transcript capture?
 - chgnet/pymatgen/torch compatibility on Python 3.12?
 - MP-compatible energy corrections for CHGNet vs MP hull: confirmed convention?
-- JARVIS / 3DSC field names for Tc, pressure, structure?
+- JARVIS / 3DSC field names for Tc, pressure, structure? **RESOLVED: supercon_3d fields = Tc, lamb, wlog, press, stability, atoms, jid, cfid, a2F, a2F_original_x/y**

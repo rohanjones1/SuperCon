@@ -1,0 +1,113 @@
+# Pre-registration 001 (Arm A: Tc-proxy ranking benchmark)
+# Lock with scripts/lock_prereg.py. sha256 is filled automatically from data/processed/seeds.csv.
+
+scope: >
+  This pre-registration covers Arm A only (hypotheses H1 and H2: composition-based Tc-proxy
+  ranking on computed reference labels). The agentic-loop and cost-per-validated-hit hypotheses,
+  and the stability-engine metrics, will be added as an addendum BEFORE the runs that test them.
+
+question: >
+  Can a composition-only model, trained without seeing a compound's family, rank computed
+  conventional superconductors above non-superconductors better than simple baselines?
+
+dataset:
+  source: JARVIS supercon_3d (1058 records; 626 after press=0 GPa and stability=stable)
+  reference: "https://www.nature.com/articles/s41524-022-00933-1"
+  label_semantics: >
+    ref_tc = computed reference labels (DFPT + Allen-Dynes formula, NOT experimental).
+    Binary label = ref_tc >= primary_threshold_K.
+  sha256: TBD
+  split_col_note: >
+    The split column (train/holdout, seed 42, target 25%) is DESCRIPTIVE ONLY.
+    It overshot to approximately 35.5% holdout due to large groups and is NOT used
+    for primary analysis.
+
+deviation_note: >
+  The first split (group_id, seed 42, target 25%) overshot to 35.5% holdout because
+  of large groups. It was replaced with deterministic grouped folds BEFORE any model
+  was trained.
+
+fold_note: >
+  Fold 0 consists entirely of group 43 (139 rows, 7 positives). Per-fold metrics are
+  descriptive only; decisions use pooled out-of-fold metrics with cluster bootstrap.
+  Group 2 contains 34 of 105 positives (about one third), so its influence is tested
+  explicitly in the sensitivity analysis.
+
+thresholds:
+  primary_threshold_K: 5.0
+  exploratory_threshold_K: 10.0
+  note: "Exploratory threshold is reported separately and not used for H1/H2 decisions."
+
+primary_design:
+  type: grouped_5fold_cv
+  group_col: group_id
+  group_definition: "union-find over rows sharing prototype_key OR reduced formula"
+  n_folds: 5
+  fold_assignment: >
+    Deterministic, no randomness. Groups sorted by size descending (tie-break: group_id
+    ascending), assigned to the fold with fewest rows so far (tie-break: lowest fold index).
+    Out-of-fold predictions collected for all rows; model trained on the other 4 folds.
+
+model:
+  type: sklearn RandomForestClassifier
+  params:
+    {
+      n_estimators: 500,
+      min_samples_leaf: 3,
+      class_weight: balanced_subsample,
+      random_state: 0,
+    }
+  features: >
+    Composition-only (pymatgen Composition/Element): for each of Z, electronegativity,
+    atomic_mass, atomic_radius, row, group, mendeleev_no, melting_point, molar_volume:
+    fraction-weighted mean, min, max, range, std; plus nelements. No structure features,
+    no element one-hots.
+  imputation: "median of TRAIN folds only, fit inside each CV loop"
+  tuning: "none. Hyperparameters and features are fixed by this document."
+
+hypotheses:
+  - id: H1
+    text: >
+      A composition-based Tc proxy trained only on the other 4 folds ranks
+      out-of-fold compounds with ref_tc >= 5 K above those below.
+    decision_rule: "Supported iff pooled OOF AUROC cluster-bootstrap 95% CI lower bound > 0.5."
+    falsifier: "CI includes 0.5 (reported as not supported)."
+    agent_generated: false
+
+  - id: H2
+    text: "The proxy beats baseline B1 (score = 1 / mean_atomic_mass) in pooled OOF AUROC."
+    decision_rule: >
+      Supported iff the cluster-bootstrap 95% CI of AUROC(proxy) - AUROC(B1) has lower bound > 0.
+      If the point estimate favors the proxy but the CI includes 0: INCONCLUSIVE.
+    falsifier: "B1 AUROC >= proxy AUROC (point estimate) -> not supported."
+    agent_generated: false
+
+baselines:
+  B0: { name: random, description: "Uniform random scores, seed=0" }
+  B1:
+    {
+      name: inverse_mean_atomic_mass,
+      description: "score = 1 / mean_atomic_mass; no training",
+    }
+
+metrics:
+  primary:
+    - AUROC
+    - hit_rate_at_top_10_pct # fraction of the top 10% of rows by score that are positive
+    - enrichment # hit_rate_at_top_10_pct / base_rate
+  confidence: "cluster bootstrap over group_id, 1000 resamples, seed 0, percentile method"
+  sensitivity: # reported as sensitivity, NOT used for decisions
+    - leave_one_group_out: >
+        Run separately for group_id 43, 2 and 29 (the three largest by rows): drop the group from
+        training AND evaluation, rerun the full CV, report pooled AUROC with CI for proxy and B1.
+    - within_group_auroc: >
+        For groups with >= 20 rows, >= 3 positives and >= 3 negatives: per-group AUROC;
+        report median and range.
+    - exploratory_threshold_10K: "Repeat primary analysis with label = ref_tc >= 10 K."
+  descriptive: "per-fold AUROC table (descriptive only)"
+
+limitations:
+  - "Labels are computed (DFPT + Allen-Dynes), not experimental measurements."
+  - "Only JARVIS 'stable' entries at 0 GPa are used; dataset is low-Tc dominated; results do not test a stability filter."
+  - "Tc proxy trained on computed labels may not transfer to novel chemistries."
+  - "Family structure is lumpy (three groups hold about half of all rows); effective sample size is smaller than 626."

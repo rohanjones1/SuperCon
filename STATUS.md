@@ -1,6 +1,12 @@
 # Status
-- Current milestone: **M0 (not started)**
-- Decisions: D1 accepted (conventional ambient-pressure; borides/carbides/silicides/intermetallics). MP key env var: `MAT_PROJECT_API`.
-- Lesson from first attempt: agent looped on shell commands. Human now runs all commands.
-- Working: nothing verified yet.
-- Open issues: none logged.
+- Current milestone: **M2d complete** (pending pytest + build_dataset)
+- M0-M2c all PASS. M2d: added deterministic grouped 5-fold CV.
+- New functions: assign_folds (greedy size-balanced, no randomness), assert_fold_integrity.
+- Tests: 13 total (6 old + 4 fold + 3 M2c). All expected to pass.
+- draft_001.yaml updated: primary design = grouped 5-fold CV, cluster bootstrap, sensitivity analyses.
+- deviation_note added: first split overshot to ~35.5%; replaced with folds before any model trained.
+- Decisions added: D15 (folds primary, split descriptive only).
+- seeds.csv will gain fold column (0-4); SHA256 changes after build_dataset re-run.
+- Next: run pytest tests/test_data.py, then build_dataset.py, then lock_prereg.py.
+- After M2 confirmed: M3 = composition Tc proxy (train 4 folds, predict 1, pool AUROC vs B0/B1).
+- Open: D6 (two model vendors) still pending; structures.json is large, confirm disk space.
