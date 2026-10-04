@@ -4,6 +4,8 @@ A small agentic lab that screens cached materials with a calibrated CHGNet energ
 
 Can the calibrated CHGNet screening layer reduce the downstream expensive-validation pool while retaining a high fraction of promising materials?
 
+Or in simple terms, can we shorten the process of finding a suitable material for room temperature superconductors by using AI agents experimentation work loops to filter out incompatible and unstable material formulations?
+
 This is evidence tier **T1**. It does not claim a superconductor, a DFT result, or a room-temperature material. CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data.
 
 The checked-in demo is **run 8**. A clone-and-run creates a **new** iteration with new IDs. Both use the same lab tools. Numbers are computed by that code and written to the local ledger. They are not typed by an LLM.
