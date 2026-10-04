@@ -1,0 +1,675 @@
+{
+  "generated_at": "2026-10-04T04:45:25.349080+00:00",
+  "caveat": "CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data.",
+  "priority_note": "validation_priority equals the CHGNet hull (eV/atom). LOWER value = validate first (build_validation_queue ranks RETAIN candidates ascending, ties broken by material_id). It is a queue order for future DFT/experiment, not a stability claim.",
+  "evidence_tier": "T1",
+  "question": "Can the calibrated CHGNet screening layer reduce the downstream expensive-validation pool while retaining a high fraction of promising materials for room temperature superconductors?",
+  "run_id": 8,
+  "candidates_source": "experiments/runs/run_8.json",
+  "repo_url": "https://github.com/rohanjones1/SuperCon",
+  "ids": {
+    "hypothesis_id": 10,
+    "spec_id": 11,
+    "run_id": 8,
+    "evaluation_run_id": 9,
+    "audit_id": 10,
+    "approval_id": null,
+    "plan_id": null,
+    "policy_calibration_run_id": 3
+  },
+  "hypothesis": {
+    "statement": "AGENT HYPOTHESIS (pre-experiment): The calibrated CHGNet energy-above-hull stability gate will remove a modest fraction of the cached pool while retaining most structures that would pass the Materials Project hull stability criterion, because calibration aligns the gate to MP-referenced thresholds.",
+    "predicted_pool_reduction": "minor",
+    "predicted_recall_of_mp_stable": "high",
+    "frozen_thresholds": {
+      "high_recall_min": 0.8,
+      "high_recall_min_source": "reports/stability_policy.json:recall_target",
+      "substantial_reduction_max_retained_fraction": 0.5
+    },
+    "agent_generated": true
+  },
+  "planner": {
+    "chosen_test": "chgnet_triage",
+    "alternatives_considered": "composition_proxy: measures family-held-out AUROC/enrichment for a composition Tc proxy (reports/arm_a_results_run1.json), not energy-above-hull gate retention or removal on the cached pool; wrong construct for hypothesis 10. dft_validation: runnable_in_this_lab is false (menu note: not available; script generation only); cannot be scheduled in this lab.",
+    "expected_learning": "If applying the deployed screening cutoff to the cached pool shows a modest rejected fraction while most MP-hull-stable references remain accepted, the next decision can treat the gate as a cheap pre-filter before higher-fidelity tests. If recall against MP-referenced stability is clearly worse than the in-sample policy metrics suggest, the next decision should defer pool-wide filtering until held-out calibration or a smaller audit batch. If precision is poor (many false rejects among known-stable controls), the next decision should revert to hull checks without aggressive triage.",
+    "stop_rule": "Stop after one batch completes with passing positive and negative controls and ledger-recorded triage outcomes for all candidates in scope; do not extend the batch to chase better in-sample metrics. Abort and record failure if controls fail or CHGNet relaxation errors exceed the batch invalidation policy.",
+    "unknowns": null,
+    "max_candidates_upper_bound": 395,
+    "tests": [
+      {
+        "name": "composition_proxy",
+        "tier": "T1",
+        "runnable_in_this_lab": true,
+        "why_chosen": null,
+        "why_not_chosen": "measures family-held-out AUROC/enrichment for a composition Tc proxy (reports/arm_a_results_run1.json), not energy-above-hull gate retention or removal on the cached pool; wrong construct for hypothesis 10.",
+        "metrics": {
+          "measured_performance": {
+            "auroc": {
+              "value": 0.5811260396673065,
+              "source": "reports/arm_a_results_run1.json:point_estimates.proxy.auroc ; bootstrap_ci.proxy.auroc_ci",
+              "ci_95": [0.46966152183300647, 0.6595794913147774]
+            },
+            "enrichment": {
+              "value": 1.057757296466974,
+              "source": "reports/arm_a_results_run1.json:point_estimates.proxy.enrichment ; bootstrap_ci.proxy.enrichment_ci",
+              "ci_95": [0.4102144199785177, 1.7084743112135505]
+            }
+          },
+          "measured_cost_s_per_candidate": null,
+          "cost_note": "not separately measured",
+          "limits": [
+            "trained on computed reference labels (JARVIS DFPT + Allen-Dynes), not experimental Tc",
+            "evaluated family-held-out (grouped CV over group_id)",
+            "AUROC CI includes 0.5 (not distinguishable from random)"
+          ]
+        }
+      },
+      {
+        "name": "chgnet_triage",
+        "tier": "T1",
+        "runnable_in_this_lab": true,
+        "why_chosen": "Selected.",
+        "why_not_chosen": null,
+        "metrics": {
+          "how_to_read": "deployed_policy_in_sample is the policy lookup_screening applies; pre_registered_at_0.05 is the un-tuned result.",
+          "pre_registered_at_0.05": {
+            "precision": {
+              "value": 0.8333333333333334,
+              "source": "reports/stability_calibration.json:metrics.c_stability_classification_at_0.05.precision ; metrics.c_stability_classification_at_0.05.precision_wilson_ci_95",
+              "wilson_ci_95": [0.5519636426153274, 0.9530358523851776]
+            },
+            "recall": {
+              "value": 0.6666666666666666,
+              "source": "reports/stability_calibration.json:metrics.c_stability_classification_at_0.05.recall ; metrics.c_stability_classification_at_0.05.recall_wilson_ci_95",
+              "wilson_ci_95": [0.41713125151212976, 0.8482389930530876]
+            },
+            "hull_mae_ev_per_atom": {
+              "value": 0.038261201839521454,
+              "source": "reports/stability_calibration.json:metrics.b_hull_mae.corrected_ref"
+            },
+            "verdict": {
+              "value": "NOT USABLE AS-IS",
+              "source": "reports/stability_calibration.json:verdict.message"
+            }
+          },
+          "deployed_policy_in_sample": {
+            "screening_cutoff_ev_per_atom": {
+              "value": 0.0585322711221589,
+              "source": "reports/stability_policy.json:screening_cutoff_ev_per_atom"
+            },
+            "precision": {
+              "value": 0.75,
+              "source": "reports/stability_policy.json:precision_at_cutoff ; precision_wilson_ci_95",
+              "wilson_ci_95": [0.5050123107060135, 0.8981809801576265]
+            },
+            "recall": {
+              "value": 0.8,
+              "source": "reports/stability_policy.json:recall_at_cutoff ; recall_wilson_ci_95",
+              "wilson_ci_95": [0.5481406466534955, 0.9295257935638959]
+            },
+            "note": "cutoff chosen on the same 39 compounds; in-sample design fit, likely optimistic; not held-out"
+          },
+          "measured_cost_s_per_candidate": {
+            "value": 2.27337384223938,
+            "statistic": "median",
+            "n_rows_used": 39,
+            "scope": "relaxation only",
+            "note": "relaxation only (includes per-call CHGNet import and model construction); excludes hull step and cached MP competing-phase fetch",
+            "source": "reports/stability_calibration.csv:wall_ms (rows with empty error)"
+          },
+          "limits": [
+            "cutoff calibrated in-sample on 39 compounds",
+            "misses some stable compounds (recall < 1)"
+          ]
+        }
+      },
+      {
+        "name": "dft_validation",
+        "tier": "T3",
+        "runnable_in_this_lab": false,
+        "why_chosen": null,
+        "why_not_chosen": "runnable_in_this_lab is false (menu note: not available; script generation only); cannot be scheduled in this lab.",
+        "metrics": {
+          "measured_performance": null,
+          "measured_cost_s_per_candidate": null,
+          "note": "not available; script generation only"
+        }
+      }
+    ]
+  },
+  "budget": {
+    "budget_id": "budget_001",
+    "total_compute_budget_s": 900,
+    "candidate_pool_size": 200,
+    "affordable_candidates": 395,
+    "cost_basis_note": "Upper bound. Based on relaxation-only median (includes model load); excludes the hull step and Materials Project competing-phase fetch, so end-to-end cost per novel candidate is unmeasured and likely higher.",
+    "set_by": "human"
+  },
+  "result": {
+    "n_pool": 39,
+    "n_screened": 39,
+    "n_retained": 15,
+    "n_deprioritized": 24,
+    "validation_queue_size": 15,
+    "validation_queue_top5": [
+      "mp-1199486",
+      "mp-1432",
+      "mp-542465",
+      "mp-1232339",
+      "mp-21502"
+    ],
+    "controls": [
+      {
+        "control_id": "positive_hull_0",
+        "expected": "RETAIN",
+        "observed": "RETAIN",
+        "passed": true
+      },
+      {
+        "control_id": "negative_hull_cutoff_plus_1",
+        "expected": "DEPRIORITIZE",
+        "observed": "DEPRIORITIZE",
+        "passed": true
+      },
+      {
+        "control_id": "determinism_rescreen",
+        "expected": "identical",
+        "observed": "identical",
+        "passed": true
+      },
+      {
+        "control_id": "frozen_convention",
+        "expected": "corrected",
+        "observed": "corrected",
+        "passed": true
+      }
+    ],
+    "controls_passed": true,
+    "wall_ms": 2579.380000010133,
+    "timing_note": "wall_ms is a cache lookup, not CHGNet compute time.",
+    "cutoff_ev_per_atom": 0.0585322711221589,
+    "frozen_convention": "corrected"
+  },
+  "candidates": [
+    {
+      "material_id": "mp-1001602",
+      "formula": "B12W",
+      "chgnet_hull_ev_per_atom": 0.20738074080629065,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.20738074080629065,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1010",
+      "formula": "MnB4",
+      "chgnet_hull_ev_per_atom": 0.07619849201171913,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07619849201171913,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1075796",
+      "formula": "Mg3Si2",
+      "chgnet_hull_ev_per_atom": 0.20727996682568373,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.20727996682568373,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1079437",
+      "formula": "FeB4",
+      "chgnet_hull_ev_per_atom": 0.017140870503255634,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.017140870503255634,
+      "queue_rank": 9
+    },
+    {
+      "material_id": "mp-1087230",
+      "formula": "Si2Mo3",
+      "chgnet_hull_ev_per_atom": 0.10053948657617262,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10053948657617262,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1095177",
+      "formula": "SiNi",
+      "chgnet_hull_ev_per_atom": 0.053514701433105216,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.053514701433105216,
+      "queue_rank": 13
+    },
+    {
+      "material_id": "mp-1100455",
+      "formula": "MgSi",
+      "chgnet_hull_ev_per_atom": 0.22266694245279917,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.22266694245279917,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-11192",
+      "formula": "TaSi2",
+      "chgnet_hull_ev_per_atom": 0.049246987087673944,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.049246987087673944,
+      "queue_rank": 12
+    },
+    {
+      "material_id": "mp-1183407",
+      "formula": "Be3Si",
+      "chgnet_hull_ev_per_atom": 0.27125693121337857,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.27125693121337857,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1187005",
+      "formula": "SiAg3",
+      "chgnet_hull_ev_per_atom": 0.1812770390222167,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.1812770390222167,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1187936",
+      "formula": "Zn3Si",
+      "chgnet_hull_ev_per_atom": 0.17970467219909647,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.17970467219909647,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1198133",
+      "formula": "Y5Si4",
+      "chgnet_hull_ev_per_atom": 0.011202042696397463,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.011202042696397463,
+      "queue_rank": 6
+    },
+    {
+      "material_id": "mp-1199486",
+      "formula": "Gd5Si4",
+      "chgnet_hull_ev_per_atom": 0.0,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0,
+      "queue_rank": 1
+    },
+    {
+      "material_id": "mp-1214755",
+      "formula": "BPd6",
+      "chgnet_hull_ev_per_atom": 0.014193614414062417,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.014193614414062417,
+      "queue_rank": 8
+    },
+    {
+      "material_id": "mp-1220588",
+      "formula": "Nb3Si",
+      "chgnet_hull_ev_per_atom": 0.10844798101237174,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10844798101237174,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1224874",
+      "formula": "Gd2Si3",
+      "chgnet_hull_ev_per_atom": 0.1673818718710951,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.1673818718710951,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1232339",
+      "formula": "LiC12",
+      "chgnet_hull_ev_per_atom": 0.005351892785455448,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.005351892785455448,
+      "queue_rank": 4
+    },
+    {
+      "material_id": "mp-1238834",
+      "formula": "VC",
+      "chgnet_hull_ev_per_atom": 0.12608549563856286,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.12608549563856286,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-13052",
+      "formula": "Sr5Si3",
+      "chgnet_hull_ev_per_atom": 0.06699376495117182,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.06699376495117182,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-1432",
+      "formula": "Be2B",
+      "chgnet_hull_ev_per_atom": 0.0,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0,
+      "queue_rank": 2
+    },
+    {
+      "material_id": "mp-1752",
+      "formula": "HoSi2",
+      "chgnet_hull_ev_per_atom": 0.07927370078776086,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07927370078776086,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-21502",
+      "formula": "BRh2",
+      "chgnet_hull_ev_per_atom": 0.01045533074218774,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.01045533074218774,
+      "queue_rank": 5
+    },
+    {
+      "material_id": "mp-2582",
+      "formula": "TiSi2",
+      "chgnet_hull_ev_per_atom": 0.03314587062174468,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.03314587062174468,
+      "queue_rank": 10
+    },
+    {
+      "material_id": "mp-28731",
+      "formula": "V6C5",
+      "chgnet_hull_ev_per_atom": 0.058532271122158974,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.058532271122158974,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-313",
+      "formula": "YC2",
+      "chgnet_hull_ev_per_atom": 0.07983138009114477,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07983138009114477,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-541840",
+      "formula": "DyC2",
+      "chgnet_hull_ev_per_atom": 0.054456698759331346,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.054456698759331346,
+      "queue_rank": 14
+    },
+    {
+      "material_id": "mp-542465",
+      "formula": "Pr5Si4",
+      "chgnet_hull_ev_per_atom": 0.0049345127842883585,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0049345127842883585,
+      "queue_rank": 3
+    },
+    {
+      "material_id": "mp-542709",
+      "formula": "EuSi6",
+      "chgnet_hull_ev_per_atom": 0.11980387386997826,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.11980387386997826,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-567164",
+      "formula": "BRh",
+      "chgnet_hull_ev_per_atom": 0.10114712830810557,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10114712830810557,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-568646",
+      "formula": "Ta3Si",
+      "chgnet_hull_ev_per_atom": 0.036592194958496194,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.036592194958496194,
+      "queue_rank": 11
+    },
+    {
+      "material_id": "mp-579",
+      "formula": "CrC",
+      "chgnet_hull_ev_per_atom": 0.23747384657714754,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23747384657714754,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-581000",
+      "formula": "EuC10",
+      "chgnet_hull_ev_per_atom": 0.23981411636126992,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23981411636126992,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-7948",
+      "formula": "ReSi",
+      "chgnet_hull_ev_per_atom": 0.01364829243896537,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.01364829243896537,
+      "queue_rank": 7
+    },
+    {
+      "material_id": "mp-973668",
+      "formula": "LuSi3",
+      "chgnet_hull_ev_per_atom": 0.23468177566772397,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23468177566772397,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-976593",
+      "formula": "Nd3Si",
+      "chgnet_hull_ev_per_atom": 0.15867667205688463,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.15867667205688463,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-993",
+      "formula": "DySi2",
+      "chgnet_hull_ev_per_atom": 0.07244140597037774,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07244140597037774,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-9969",
+      "formula": "ScSi",
+      "chgnet_hull_ev_per_atom": 0.05762369811401413,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.05762369811401413,
+      "queue_rank": 15
+    },
+    {
+      "material_id": "mp-999120",
+      "formula": "TcB",
+      "chgnet_hull_ev_per_atom": 0.19729671167879914,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.19729671167879914,
+      "queue_rank": null
+    },
+    {
+      "material_id": "mp-999192",
+      "formula": "SiNi",
+      "chgnet_hull_ev_per_atom": 0.08446381718627904,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.08446381718627904,
+      "queue_rank": null
+    }
+  ],
+  "evaluation": {
+    "verdict": "not_supported",
+    "observed": {
+      "pool_reduction": "substantial",
+      "recall_of_mp_stable": "not_high"
+    },
+    "predicted": {
+      "pool_reduction": "minor",
+      "recall_of_mp_stable": "high",
+      "frozen_thresholds": {
+        "high_recall_min": 0.8,
+        "high_recall_min_source": "reports/stability_policy.json:recall_target",
+        "substantial_reduction_max_retained_fraction": 0.5
+      }
+    },
+    "retrospective_mp_metrics": {
+      "tp": 11,
+      "fp": 4,
+      "fn": 3,
+      "tn": 21,
+      "precision": 0.7333333333333333,
+      "recall": 0.7857142857142857,
+      "mp_hull_column": "mp_energy_above_hull_summary",
+      "warning": "In-sample: the screening cutoff was calibrated on this same pool, so retrospective recall/precision here are a consistency check, not evidence of generalization."
+    },
+    "in_sample": true
+  },
+  "learning": {
+    "what_was_learned": "CHGNet triage retained 15 of 39 candidates (retained_fraction \u2248 0.385), classifying pool reduction as substantial rather than minor, with retrospective MP recall 0.786 and precision 0.733 (tp=11, fp=4, fn=3, tn=21) on n_with_ground_truth=39.",
+    "next_decision": "narrow_downstream_to_survivors",
+    "deterministic_signal": "narrow_downstream_to_survivors",
+    "matches_signal": true,
+    "proposed_rule_change": "none",
+    "rule_applied": false,
+    "rationale": "Per spec_stop_rule, one batch with passing controls (controls_passed=True) and full-scope triage (n_screened=39) is sufficient to stop without extending the batch. Per spec_expected_learning, observed recall_of_mp_stable was not_high and pool_reduction was substantial versus the predicted minor/high pattern, so we do not treat the gate as validated for pool-wide pre-filtering; we follow deterministic_decision_signal and narrow downstream work to the 15 survivors in the validation queue rather than scaling triage across the pool."
+  },
+  "auditor": {
+    "audit_status": "VETO",
+    "audit_id": 10,
+    "veto": true,
+    "reason": "critical checks failed: scientific_boundary_language, retrospective_metrics_without_in_sample_label:analyst_what_was_learned",
+    "checks_failed": [
+      "scientific_boundary_language",
+      "retrospective_metrics_without_in_sample_label:analyst_what_was_learned"
+    ],
+    "warnings": [
+      "retrospective counts {'tp': 11, 'fp': 4, 'fn': 3, 'tn': 21} differ from stability_policy.json counts {'tp': 12, 'fp': 4, 'fn': 3, 'tn': 20}; ground-truth column (mp_energy_above_hull_summary) may differ from the one used for calibration (open assumption)"
+    ],
+    "promotion_allowed": false
+  },
+  "human_gate": {
+    "status": "pending",
+    "approver": null,
+    "timestamp": null,
+    "approval_id": null,
+    "channel": null
+  },
+  "iteration2": {
+    "status": "pending",
+    "focus": null,
+    "focus_size": null,
+    "previous_pool_size": null,
+    "next_experiment": "held_out_chgnet_validation",
+    "experiment_status": "blocked",
+    "reason": "requires held-out CHGNet computation not available in this lab",
+    "plan_id": null
+  },
+  "arm_a": {
+    "n_samples": 626,
+    "n_positive": 105,
+    "base_rate": 0.16773162939297126,
+    "point_estimates": {
+      "proxy": {
+        "auroc": 0.5811260396673065,
+        "hit_rate_top10": 0.1774193548387097,
+        "enrichment": 1.057757296466974
+      },
+      "B0": {
+        "auroc": 0.5528013892697194,
+        "hit_rate_top10": 0.20967741935483872,
+        "enrichment": 1.2500768049155144
+      },
+      "B1": {
+        "auroc": 0.5239831825244494,
+        "hit_rate_top10": 0.22580645161290322,
+        "enrichment": 1.346236559139785
+      }
+    },
+    "verdicts_summary": {
+      "H1": {
+        "text": "proxy OOF AUROC CI lower bound > 0.5",
+        "verdict": "not_supported",
+        "auroc": 0.5811260396673065,
+        "auroc_ci": [0.46966152183300647, 0.6595794913147774]
+      },
+      "H2": {
+        "text": "proxy AUROC > B1 AUROC (paired diff CI lower bound > 0)",
+        "verdict": "inconclusive",
+        "proxy_auroc": 0.5811260396673065,
+        "B1_auroc": 0.5239831825244494,
+        "diff_ci": [-0.08397689806412592, 0.16327074613461118]
+      }
+    },
+    "honest_note": "Family-held-out composition proxy did not beat simple baselines on this split; CIs overlap. Do not claim acceleration from Arm A."
+  },
+  "policy_vs_run_warning": "Run retrospective counts may differ from stability_policy.json (open GT-column issue). Show both; do not silently pick one.",
+  "policy_counts": {
+    "tp": 12,
+    "fp": 4,
+    "fn": 3,
+    "tn": 20,
+    "recall_at_cutoff": 0.8,
+    "precision_at_cutoff": 0.75
+  },
+  "agents": [
+    {
+      "id": "pi",
+      "name": "PI",
+      "role": "orchestrates; no lab tools",
+      "handoff": "delegates"
+    },
+    {
+      "id": "hypothesis",
+      "name": "Hypothesis",
+      "role": "preregisters prediction before the run",
+      "handoff": "hypothesis_id"
+    },
+    {
+      "id": "planner",
+      "name": "Planner",
+      "role": "chooses one test from the menu and registers the spec",
+      "handoff": "spec_id"
+    },
+    {
+      "id": "runner",
+      "name": "Runner",
+      "role": "screens the cached pool with controls; no ground truth",
+      "handoff": "run_id"
+    },
+    {
+      "id": "analyst",
+      "name": "Analyst",
+      "role": "compares the registered prediction with the run and records the next decision",
+      "handoff": "evaluation_run_id"
+    },
+    {
+      "id": "auditor",
+      "name": "Auditor",
+      "role": "integrity and boundary checks; APPROVE or VETO",
+      "handoff": "audit_id"
+    },
+    {
+      "id": "human_gate",
+      "name": "Human gate",
+      "role": "CLI approval only; agents cannot approve",
+      "handoff": "approval_id"
+    },
+    {
+      "id": "next_iteration_planner",
+      "name": "Iteration 2 planner",
+      "role": "plans the next iteration only after a recorded human decision",
+      "handoff": "plan_id"
+    }
+  ],
+  "reports": {
+    "discovery_markdown": "# Discovery report: run 8\n\n## Question\nCan the calibrated CHGNet screening layer reduce the downstream expensive-validation pool while retaining a high fraction of promising materials for room temperature superconductors? (Stability gating is the bottleneck before expensive validation.)\n\n## Hypothesis (agent_generated, registered before the run)\nAGENT HYPOTHESIS (pre-experiment): The calibrated CHGNet energy-above-hull stability gate will remove a modest fraction of the cached pool while retaining most structures that would pass the Materials Project hull stability criterion, because calibration aligns the gate to MP-referenced thresholds.\n- Predicted pool reduction: minor; predicted recall of MP-stable: high; frozen thresholds: {\"high_recall_min\": 0.8, \"high_recall_min_source\": \"reports/stability_policy.json:recall_target\", \"substantial_reduction_max_retained_fraction\": 0.5}\n\n## Alternatives\n- composition_proxy (T1): runnable_in_this_lab=True\n- chgnet_triage (T1): runnable_in_this_lab=True\n- dft_validation (T3): runnable_in_this_lab=False\n- Planner's reasoning (agent_generated): composition_proxy: measures family-held-out AUROC/enrichment for a composition Tc proxy (reports/arm_a_results_run1.json), not energy-above-hull gate retention or removal on the cached pool; wrong construct for hypothesis 10. dft_validation: runnable_in_this_lab is false (menu note: not available; script generation only); cannot be scheduled in this lab.\n\n## Experiment\n- Selected: chgnet_triage (spec_id 11); pool calibration_run_3; max_candidates (upper bound) 395\n- Why / expected learning (agent_generated): If applying the deployed screening cutoff to the cached pool shows a modest rejected fraction while most MP-hull-stable references remain accepted, the next decision can treat the gate as a cheap pre-filter before higher-fidelity tests. If recall against MP-referenced stability is clearly worse than the in-sample policy metrics suggest, the next decision should defer pool-wide filtering until held-out calibration or a smaller audit batch. If precision is poor (many false rejects among known-stable controls), the next decision should revert to hull checks without aggressive triage.\n- Stop rule (agent_generated): Stop after one batch completes with passing positive and negative controls and ledger-recorded triage outcomes for all candidates in scope; do not extend the batch to chase better in-sample metrics. Abort and record failure if controls fail or CHGNet relaxation errors exceed the batch invalidation policy.\n\n## Result\n- Screened 39 of 39; RETAINED BY CALIBRATED SCREENING 15; DEPRIORITIZED 24; validation queue 15\n- Controls: passed (positive_hull_0, negative_hull_cutoff_plus_1, determinism_rescreen, frozen_convention)\n- Runtime: 2579.380 ms (cache lookup, not CHGNet compute time)\n- Cutoff 0.0585322711221589 eV/atom, frozen convention corrected, calibration run 3\n\n## Retrospective evidence (in-sample; NOT prospective performance)\n- TP 11, FP 4, FN 3, TN 21; precision 0.733, recall 0.786 (MP hull <= 0.05 eV/atom, column mp_energy_above_hull_summary)\n- In-sample: the screening cutoff was calibrated on this same pool, so retrospective recall/precision here are a consistency check, not evidence of generalization.\n\n## Analyst conclusion\nVerdict (computed): **not_supported**; observed {\"pool_reduction\": \"substantial\", \"recall_of_mp_stable\": \"not_high\"} vs predicted minor/high\n\n## Learning\n- (agent_generated) CHGNet triage retained 15 of 39 candidates (retained_fraction \u2248 0.385), classifying pool reduction as substantial rather than minor, with retrospective MP recall 0.786 and precision 0.733 (tp=11, fp=4, fn=3, tn=21) on n_with_ground_truth=39.\n\n## Next decision\n- Proposed (agent_generated): narrow_downstream_to_survivors (deterministic signal narrow_downstream_to_survivors; match True)\n- Proposed rule change: none (status: proposed_not_applied; applied: False)\n- Next experiment: held_out_chgnet_validation, status blocked: requires held-out CHGNet computation not available in this lab\n\n## Auditor\nVETO (audit_id 10): critical checks failed: scientific_boundary_language, retrospective_metrics_without_in_sample_label:analyst_what_was_learned\n- warning: retrospective counts {'tp': 11, 'fp': 4, 'fn': 3, 'tn': 21} differ from stability_policy.json counts {'tp': 12, 'fp': 4, 'fn': 3, 'tn': 20}; ground-truth column (mp_energy_above_hull_summary) may differ from the one used for calibration (open assumption)\n\n## Human gate\npending\n\n## Validation boundary\nCHGNet triage is not DFT validation. RETAIN means worth computing DFT stability; DEPRIORITIZE does not mean unstable. The only DFT-derived truth here is the retrospective MP label, used in-sample. Held-out validation of the calibrated cutoff remains required.\n\n## Traceability\n- hypothesis_id 10; spec_id 11; run_id 8; evaluation_run_id 9; audit_id 10; approval_id pending; plan_id pending; policy calibration run_id 3\n- Artifacts: experiments/runs/run_8*.json; ledger data\\ledger.sqlite\n\n_CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data._\n",
+    "iteration_markdown": "# Discovery iteration: run 8\n\n**Scientific question:** Can the calibrated CHGNet screening layer reduce the downstream expensive-validation pool while retaining a high fraction of promising materials for room temperature superconductors?\n\n**Hypothesis (agent_generated, hypothesis_id 10):** AGENT HYPOTHESIS (pre-experiment): The calibrated CHGNet energy-above-hull stability gate will remove a modest fraction of the cached pool while retaining most structures that would pass the Materials Project hull stability criterion, because calibration aligns the gate to MP-referenced thresholds.\n- Predicted pool reduction: minor; observed: substantial\n- Predicted recall of MP-stable: high; observed: not_high\n- Verdict (computed): **not_supported**\n\n**Experiment chosen (spec_id 11):** chgnet_triage\n\n| Measure | Value |\n|---|---|\n| Candidate pool | 39 (screened 39) |\n| RETAINED BY CALIBRATED SCREENING | 15 |\n| DEPRIORITIZED | 24 |\n| Validation queue size | 15 |\n| Retained fraction | 0.385 |\n| Controls passed | True |\n\n**Retrospective MP metrics (in-sample, not prospective performance):** precision 0.733, recall 0.786 (TP 11, FP 4, FN 3, TN 21). In-sample: the screening cutoff was calibrated on this same pool, so retrospective recall/precision here are a consistency check, not evidence of generalization.\n\n**What was learned (agent_generated):** CHGNet triage retained 15 of 39 candidates (retained_fraction \u2248 0.385), classifying pool reduction as substantial rather than minor, with retrospective MP recall 0.786 and precision 0.733 (tp=11, fp=4, fn=3, tn=21) on n_with_ground_truth=39.\n\n**Next decision (agent_generated):** narrow_downstream_to_survivors (deterministic signal: narrow_downstream_to_survivors; match: True)\n- Rationale: Per spec_stop_rule, one batch with passing controls (controls_passed=True) and full-scope triage (n_screened=39) is sufficient to stop without extending the batch. Per spec_expected_learning, observed recall_of_mp_stable was not_high and pool_reduction was substantial versus the predicted minor/high pattern, so we do not treat the gate as validated for pool-wide pre-filtering; we follow deterministic_decision_signal and narrow downstream work to the 15 survivors in the validation queue rather than scaling triage across the pool.\n- Proposed rule change (proposed_not_applied): none\n- Required next validation: Held-out evaluation of the calibrated cutoff on compounds not used for calibration (requires a CHGNet compute tool; not available in this loop).\n\nTraceability: run_id 8, evaluation_run_id 9, spec_id 11, hypothesis_id 10, policy calibration run 3, 39 candidate IDs in experiments/runs/run_8.json.\n\n_CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data._\n"
+  }
+}

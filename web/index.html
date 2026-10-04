@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SuperCon · Discovery lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#question">SuperCon</a>
+    <nav class="nav" aria-label="Page">
+      <a href="#handoff">Run</a>
+      <a href="#result">Screen</a>
+      <a href="#matrix">Evidence</a>
+      <a href="#arma">Arm A</a>
+      <a href="#candidates">Candidates</a>
+      <a href="#learning">Decision</a>
+      <a href="#trace">Trace</a>
+    </nav>
+    <button type="button" id="run-btn" class="run-btn">Run one discovery</button>
+  </header>
+  <div id="caveat-bar" class="caveat-bar" role="note">Loading snapshot…</div>
+
+  <main id="page" class="page" hidden>
+    <header id="question" class="hero">
+      <p class="kicker" id="kicker"></p>
+      <h1 id="question-text"></h1>
+      <p class="meta" id="header-meta"></p>
+      <div id="status-tiles" class="tiles"></div>
+    </header>
+
+    <section id="handoff" class="section">
+      <div class="section-head">
+        <h2>Discovery pipeline</h2>
+        <p id="pi-banner" class="quiet"></p>
+      </div>
+      <div class="run-layout">
+        <div>
+          <div id="timeline" class="timeline"></div>
+          <p id="replay-caption" class="caption">Sequential handoff. The button reloads the snapshot and walks this run.</p>
+        </div>
+        <div class="log-card">
+          <div class="log-head">
+            <span>Run log</span>
+            <span id="log-state" class="quiet">idle</span>
+          </div>
+          <ol id="run-log" class="run-log"></ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="result" class="section">
+      <div class="section-head">
+        <h2>Screening gate</h2>
+        <p class="quiet">Cache lookup on the calibrated cutoff. DEPRIORITIZE is a queue decision.</p>
+      </div>
+      <div id="funnel" class="funnel"></div>
+      <div id="strip-wrap"></div>
+      <div id="big-numbers" class="numbers"></div>
+      <p id="result-note"></p>
+      <ul id="controls" class="controls"></ul>
+      <p id="timing" class="quiet"></p>
+    </section>
+
+    <section id="matrix" class="section">
+      <div class="section-head">
+        <h2>Retrospective counts</h2>
+        <p id="matrix-caption" class="quiet"></p>
+      </div>
+      <div class="split">
+        <div id="matrix-table"></div>
+        <div id="policy-counts" class="card"></div>
+      </div>
+    </section>
+
+    <section id="arma" class="section">
+      <div class="section-head">
+        <h2>Arm A <span class="aside">not the main claim</span></h2>
+      </div>
+      <div id="arma-body"></div>
+    </section>
+
+    <section id="candidates" class="section">
+      <div class="section-head">
+        <h2>Candidates</h2>
+        <p id="priority-note" class="quiet"></p>
+      </div>
+      <div class="toolbar">
+        <div id="filters" class="filters" role="group" aria-label="Filter decisions"></div>
+        <input id="search" type="search" placeholder="Search formula or id" aria-label="Search formula or material id">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Queue</th>
+              <th>Material</th>
+              <th>Formula</th>
+              <th>Hull vs cutoff</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody id="candidate-rows"></tbody>
+        </table>
+      </div>
+      <p id="candidate-count" class="quiet"></p>
+    </section>
+
+    <section id="planner" class="section">
+      <div class="section-head">
+        <h2>Planner and budget</h2>
+        <p class="quiet">The planner picks one test. The others stay on the menu.</p>
+      </div>
+      <div id="planner-choice"></div>
+      <div id="test-cards" class="cards"></div>
+      <div id="budget" class="budget"></div>
+    </section>
+
+    <section id="learning" class="section">
+      <div class="section-head">
+        <h2>What changed the next decision</h2>
+      </div>
+      <div id="learning-body"></div>
+    </section>
+
+    <section id="gate" class="section">
+      <div class="section-head">
+        <h2>Auditor and human gate</h2>
+      </div>
+      <div class="split">
+        <div id="auditor" class="card"></div>
+        <div id="human-gate" class="card"></div>
+      </div>
+    </section>
+
+    <section id="next" class="section">
+      <div class="section-head">
+        <h2>Next experiment</h2>
+      </div>
+      <div id="next-body" class="card"></div>
+    </section>
+
+    <section id="trace" class="section">
+      <div class="section-head">
+        <h2>Traceability</h2>
+      </div>
+      <dl id="ids"></dl>
+      <details>
+        <summary>Discovery report</summary>
+        <pre id="discovery-md"></pre>
+      </details>
+      <details>
+        <summary>Iteration summary</summary>
+        <pre id="iteration-md"></pre>
+      </details>
+    </section>
+
+    <footer id="footer" class="footer">
+      <p id="footer-caveat"></p>
+      <p>Numbers from the snapshot, loaded from ledger artifacts. LLMs did not compute metrics.</p>
+    </footer>
+  </main>
+  <p id="missing" class="missing" hidden></p>
+  <script src="app.js"></script>
+</body>
+</html>

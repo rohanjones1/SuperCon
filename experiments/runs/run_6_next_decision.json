@@ -1,0 +1,11 @@
+{
+  "run_id": 6,
+  "label": "agent_generated",
+  "next_decision": "narrow_downstream_to_survivors",
+  "matches_deterministic_signal": true,
+  "deterministic_decision_signal": "narrow_downstream_to_survivors",
+  "what_was_learned": "On pool calibration_run_3 (n_pool=39), chgnet_triage retained 15/39 (retained_fraction\u22480.385) versus a predicted minor reduction with high MP-stable recall; retrospective in-sample recall was 0.786 (11 TP, 3 FN) and precision 0.733 (4 FP), so the pre-experiment hypothesis was not supported despite passing controls.",
+  "rationale": "spec_expected_learning: observed pool reduction was substantial (not minor) and recall_of_mp_stable was not_high, so we should not treat the gate as validated for low-cost pre-filtering without tightening validation (held-out recalibration, lower cutoff, or not gating on hull alone). spec_stop_rule: one batch on calibration_run_3 with controls passing is complete; deployed-policy in-sample recall at cutoff (0.786) is below the frozen high_recall_min (0.8), so we halt gate-dependent scaling and proceed by narrowing downstream work to the 15 survivors rather than repeating chgnet_triage on this pool.",
+  "proposed_rule_change": "Do not scale hull-only gating on calibration_run_3 at the current cutoff until held-out recalibration confirms recall \u2265 high_recall_min (0.8); downstream batches may rank/proxy only the retained validation_queue (15 IDs).",
+  "rule_change_status": "proposed_not_applied"
+}

@@ -1,0 +1,369 @@
+{
+  "run_id": 4,
+  "spec_id": 7,
+  "hypothesis_id": 6,
+  "pool_id": "calibration_run_3",
+  "chosen_test": "chgnet_triage",
+  "policy_calibration_run_id": 3,
+  "frozen_convention": "corrected",
+  "screening_cutoff_ev_per_atom": 0.0585322711221589,
+  "n_pool": 39,
+  "n_screened": 39,
+  "n_retained": 15,
+  "n_deprioritized": 24,
+  "validation_queue": [
+    "mp-1199486",
+    "mp-1432",
+    "mp-542465",
+    "mp-1232339",
+    "mp-21502",
+    "mp-1198133",
+    "mp-7948",
+    "mp-1214755",
+    "mp-1079437",
+    "mp-2582",
+    "mp-568646",
+    "mp-11192",
+    "mp-1095177",
+    "mp-541840",
+    "mp-9969"
+  ],
+  "candidates": [
+    {
+      "material_id": "mp-1001602",
+      "formula": "B12W",
+      "ledger_candidate_id": 1,
+      "chgnet_hull_ev_per_atom": 0.20738074080629065,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.20738074080629065
+    },
+    {
+      "material_id": "mp-1010",
+      "formula": "MnB4",
+      "ledger_candidate_id": 2,
+      "chgnet_hull_ev_per_atom": 0.07619849201171913,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07619849201171913
+    },
+    {
+      "material_id": "mp-1075796",
+      "formula": "Mg3Si2",
+      "ledger_candidate_id": 3,
+      "chgnet_hull_ev_per_atom": 0.20727996682568373,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.20727996682568373
+    },
+    {
+      "material_id": "mp-1079437",
+      "formula": "FeB4",
+      "ledger_candidate_id": 4,
+      "chgnet_hull_ev_per_atom": 0.017140870503255634,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.017140870503255634
+    },
+    {
+      "material_id": "mp-1087230",
+      "formula": "Si2Mo3",
+      "ledger_candidate_id": 5,
+      "chgnet_hull_ev_per_atom": 0.10053948657617262,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10053948657617262
+    },
+    {
+      "material_id": "mp-1095177",
+      "formula": "SiNi",
+      "ledger_candidate_id": 6,
+      "chgnet_hull_ev_per_atom": 0.053514701433105216,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.053514701433105216
+    },
+    {
+      "material_id": "mp-1100455",
+      "formula": "MgSi",
+      "ledger_candidate_id": 7,
+      "chgnet_hull_ev_per_atom": 0.22266694245279917,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.22266694245279917
+    },
+    {
+      "material_id": "mp-11192",
+      "formula": "TaSi2",
+      "ledger_candidate_id": 8,
+      "chgnet_hull_ev_per_atom": 0.049246987087673944,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.049246987087673944
+    },
+    {
+      "material_id": "mp-1183407",
+      "formula": "Be3Si",
+      "ledger_candidate_id": 9,
+      "chgnet_hull_ev_per_atom": 0.27125693121337857,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.27125693121337857
+    },
+    {
+      "material_id": "mp-1187005",
+      "formula": "SiAg3",
+      "ledger_candidate_id": 10,
+      "chgnet_hull_ev_per_atom": 0.1812770390222167,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.1812770390222167
+    },
+    {
+      "material_id": "mp-1187936",
+      "formula": "Zn3Si",
+      "ledger_candidate_id": 11,
+      "chgnet_hull_ev_per_atom": 0.17970467219909647,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.17970467219909647
+    },
+    {
+      "material_id": "mp-1198133",
+      "formula": "Y5Si4",
+      "ledger_candidate_id": 12,
+      "chgnet_hull_ev_per_atom": 0.011202042696397463,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.011202042696397463
+    },
+    {
+      "material_id": "mp-1199486",
+      "formula": "Gd5Si4",
+      "ledger_candidate_id": 13,
+      "chgnet_hull_ev_per_atom": 0.0,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0
+    },
+    {
+      "material_id": "mp-1214755",
+      "formula": "BPd6",
+      "ledger_candidate_id": 14,
+      "chgnet_hull_ev_per_atom": 0.014193614414062417,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.014193614414062417
+    },
+    {
+      "material_id": "mp-1220588",
+      "formula": "Nb3Si",
+      "ledger_candidate_id": 15,
+      "chgnet_hull_ev_per_atom": 0.10844798101237174,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10844798101237174
+    },
+    {
+      "material_id": "mp-1224874",
+      "formula": "Gd2Si3",
+      "ledger_candidate_id": 16,
+      "chgnet_hull_ev_per_atom": 0.1673818718710951,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.1673818718710951
+    },
+    {
+      "material_id": "mp-1232339",
+      "formula": "LiC12",
+      "ledger_candidate_id": 17,
+      "chgnet_hull_ev_per_atom": 0.005351892785455448,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.005351892785455448
+    },
+    {
+      "material_id": "mp-1238834",
+      "formula": "VC",
+      "ledger_candidate_id": 18,
+      "chgnet_hull_ev_per_atom": 0.12608549563856286,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.12608549563856286
+    },
+    {
+      "material_id": "mp-13052",
+      "formula": "Sr5Si3",
+      "ledger_candidate_id": 19,
+      "chgnet_hull_ev_per_atom": 0.06699376495117182,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.06699376495117182
+    },
+    {
+      "material_id": "mp-1432",
+      "formula": "Be2B",
+      "ledger_candidate_id": 20,
+      "chgnet_hull_ev_per_atom": 0.0,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0
+    },
+    {
+      "material_id": "mp-1752",
+      "formula": "HoSi2",
+      "ledger_candidate_id": 21,
+      "chgnet_hull_ev_per_atom": 0.07927370078776086,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07927370078776086
+    },
+    {
+      "material_id": "mp-21502",
+      "formula": "BRh2",
+      "ledger_candidate_id": 22,
+      "chgnet_hull_ev_per_atom": 0.01045533074218774,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.01045533074218774
+    },
+    {
+      "material_id": "mp-2582",
+      "formula": "TiSi2",
+      "ledger_candidate_id": 23,
+      "chgnet_hull_ev_per_atom": 0.03314587062174468,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.03314587062174468
+    },
+    {
+      "material_id": "mp-28731",
+      "formula": "V6C5",
+      "ledger_candidate_id": 24,
+      "chgnet_hull_ev_per_atom": 0.058532271122158974,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.058532271122158974
+    },
+    {
+      "material_id": "mp-313",
+      "formula": "YC2",
+      "ledger_candidate_id": 25,
+      "chgnet_hull_ev_per_atom": 0.07983138009114477,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07983138009114477
+    },
+    {
+      "material_id": "mp-541840",
+      "formula": "DyC2",
+      "ledger_candidate_id": 26,
+      "chgnet_hull_ev_per_atom": 0.054456698759331346,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.054456698759331346
+    },
+    {
+      "material_id": "mp-542465",
+      "formula": "Pr5Si4",
+      "ledger_candidate_id": 27,
+      "chgnet_hull_ev_per_atom": 0.0049345127842883585,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.0049345127842883585
+    },
+    {
+      "material_id": "mp-542709",
+      "formula": "EuSi6",
+      "ledger_candidate_id": 28,
+      "chgnet_hull_ev_per_atom": 0.11980387386997826,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.11980387386997826
+    },
+    {
+      "material_id": "mp-567164",
+      "formula": "BRh",
+      "ledger_candidate_id": 29,
+      "chgnet_hull_ev_per_atom": 0.10114712830810557,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.10114712830810557
+    },
+    {
+      "material_id": "mp-568646",
+      "formula": "Ta3Si",
+      "ledger_candidate_id": 30,
+      "chgnet_hull_ev_per_atom": 0.036592194958496194,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.036592194958496194
+    },
+    {
+      "material_id": "mp-579",
+      "formula": "CrC",
+      "ledger_candidate_id": 31,
+      "chgnet_hull_ev_per_atom": 0.23747384657714754,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23747384657714754
+    },
+    {
+      "material_id": "mp-581000",
+      "formula": "EuC10",
+      "ledger_candidate_id": 32,
+      "chgnet_hull_ev_per_atom": 0.23981411636126992,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23981411636126992
+    },
+    {
+      "material_id": "mp-7948",
+      "formula": "ReSi",
+      "ledger_candidate_id": 33,
+      "chgnet_hull_ev_per_atom": 0.01364829243896537,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.01364829243896537
+    },
+    {
+      "material_id": "mp-973668",
+      "formula": "LuSi3",
+      "ledger_candidate_id": 34,
+      "chgnet_hull_ev_per_atom": 0.23468177566772397,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.23468177566772397
+    },
+    {
+      "material_id": "mp-976593",
+      "formula": "Nd3Si",
+      "ledger_candidate_id": 35,
+      "chgnet_hull_ev_per_atom": 0.15867667205688463,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.15867667205688463
+    },
+    {
+      "material_id": "mp-993",
+      "formula": "DySi2",
+      "ledger_candidate_id": 36,
+      "chgnet_hull_ev_per_atom": 0.07244140597037774,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.07244140597037774
+    },
+    {
+      "material_id": "mp-9969",
+      "formula": "ScSi",
+      "ledger_candidate_id": 37,
+      "chgnet_hull_ev_per_atom": 0.05762369811401413,
+      "screening_decision": "RETAIN",
+      "validation_priority": 0.05762369811401413
+    },
+    {
+      "material_id": "mp-999120",
+      "formula": "TcB",
+      "ledger_candidate_id": 38,
+      "chgnet_hull_ev_per_atom": 0.19729671167879914,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.19729671167879914
+    },
+    {
+      "material_id": "mp-999192",
+      "formula": "SiNi",
+      "ledger_candidate_id": 39,
+      "chgnet_hull_ev_per_atom": 0.08446381718627904,
+      "screening_decision": "DEPRIORITIZE",
+      "validation_priority": 0.08446381718627904
+    }
+  ],
+  "controls": [
+    {
+      "control_id": "positive_hull_0",
+      "expected": "RETAIN",
+      "observed": "RETAIN"
+    },
+    {
+      "control_id": "negative_hull_cutoff_plus_1",
+      "expected": "DEPRIORITIZE",
+      "observed": "DEPRIORITIZE"
+    },
+    {
+      "control_id": "determinism_rescreen",
+      "expected": "identical",
+      "observed": "identical"
+    },
+    {
+      "control_id": "frozen_convention",
+      "expected": "corrected",
+      "observed": "corrected"
+    }
+  ],
+  "controls_passed": true,
+  "wall_ms": 1692.444899934344
+}

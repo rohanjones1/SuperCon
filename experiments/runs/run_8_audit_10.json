@@ -1,0 +1,40 @@
+{
+  "audit_id": 10,
+  "run_id": 8,
+  "evaluation_run_id": 9,
+  "audit_status": "VETO",
+  "veto": true,
+  "reason": "critical checks failed: scientific_boundary_language, retrospective_metrics_without_in_sample_label:analyst_what_was_learned",
+  "checks_passed": [
+    "artifact_run_manifest_exists",
+    "artifact_evaluation_exists",
+    "artifact_next_decision_exists",
+    "ledger_run_id_exists",
+    "ledger_run_links_spec",
+    "spec_id_exists",
+    "hypothesis_id_exists",
+    "frozen_convention_preserved",
+    "screening_cutoff_matches_policy",
+    "policy_calibration_run_matches",
+    "controls_recorded_and_passed",
+    "runner_artifact_has_no_ground_truth",
+    "candidate_count_consistent_manifest",
+    "evaluation_run_id_exists",
+    "ground_truth_used_only_after_screening",
+    "metrics_trace_to_same_run",
+    "candidate_count_consistent_evaluation",
+    "retrospective_metrics_labeled_in_sample",
+    "next_decision_traces_to_run",
+    "next_decision_follows_rule_or_justified",
+    "rule_change_not_applied"
+  ],
+  "checks_failed": [
+    "scientific_boundary_language",
+    "retrospective_metrics_without_in_sample_label:analyst_what_was_learned"
+  ],
+  "warnings": [
+    "retrospective counts {'tp': 11, 'fp': 4, 'fn': 3, 'tn': 21} differ from stability_policy.json counts {'tp': 12, 'fp': 4, 'fn': 3, 'tn': 20}; ground-truth column (mp_energy_above_hull_summary) may differ from the one used for calibration (open assumption)"
+  ],
+  "promotion_allowed": false,
+  "note": "Deterministic integrity audit. APPROVE permits the human gate; it is not a validation of any material."
+}

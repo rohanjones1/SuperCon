@@ -1,0 +1,11 @@
+{
+  "run_id": 4,
+  "label": "agent_generated",
+  "next_decision": "narrow_downstream_to_survivors",
+  "matches_deterministic_signal": true,
+  "deterministic_decision_signal": "narrow_downstream_to_survivors",
+  "what_was_learned": "[scripted_offline] Verdict partially_supported: 15 of 39 retained by calibrated screening (in-sample).",
+  "rationale": "[scripted_offline] Follows the deterministic decision signal and the spec stop rule.",
+  "proposed_rule_change": "none",
+  "rule_change_status": "proposed_not_applied"
+}

@@ -1,0 +1,11 @@
+{
+  "run_id": 8,
+  "label": "agent_generated",
+  "next_decision": "narrow_downstream_to_survivors",
+  "matches_deterministic_signal": true,
+  "deterministic_decision_signal": "narrow_downstream_to_survivors",
+  "what_was_learned": "CHGNet triage retained 15 of 39 candidates (retained_fraction \u2248 0.385), classifying pool reduction as substantial rather than minor, with retrospective MP recall 0.786 and precision 0.733 (tp=11, fp=4, fn=3, tn=21) on n_with_ground_truth=39.",
+  "rationale": "Per spec_stop_rule, one batch with passing controls (controls_passed=True) and full-scope triage (n_screened=39) is sufficient to stop without extending the batch. Per spec_expected_learning, observed recall_of_mp_stable was not_high and pool_reduction was substantial versus the predicted minor/high pattern, so we do not treat the gate as validated for pool-wide pre-filtering; we follow deterministic_decision_signal and narrow downstream work to the 15 survivors in the validation queue rather than scaling triage across the pool.",
+  "proposed_rule_change": "none",
+  "rule_change_status": "proposed_not_applied"
+}
