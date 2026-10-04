@@ -86,12 +86,14 @@ def test_dft_not_runnable(rdir):
 
 def test_budget_math(rdir):
     out = test_menu.get_budget(rdir / "budget.yaml", rdir)
-    assert out["affordable_chgnet_candidates"] == math.floor(900 / 4.0)  # 225
-    assert out["coverage_fraction"] == 1.0                              # min(1, 225/200)
+    assert out["affordable_chgnet_candidates_upper_bound"] == math.floor(900 / 4.0)  # 225
+    assert out["coverage_fraction_upper_bound"] == 1.0                              # min(1, 225/200)
+    assert out["cost_basis_note"] == test_menu.COST_BASIS_NOTE
+    assert "affordable_chgnet_candidates" not in out and "coverage_fraction" not in out
     assert out["spent_s"] == 0 and out["spend_tracking"] == "not wired yet"
     (rdir / "budget.yaml").write_text("candidate_pool_size: 1000\ntotal_compute_budget_s: 900\n", encoding="utf-8")
     out = test_menu.get_budget(rdir / "budget.yaml", rdir)
-    assert out["coverage_fraction"] == pytest.approx(225 / 1000)
+    assert out["coverage_fraction_upper_bound"] == pytest.approx(225 / 1000)
 
 
 def test_missing_file_returns_error(rdir):

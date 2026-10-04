@@ -1,18 +1,13 @@
 # Status
-- Current milestone: **M5a agent-callable lookup tool (written, awaiting test run)**
-- M0-M3 PASS. M3 Arm A: H1 not supported, H2 inconclusive (D16).
-- M4: policy cutoff=0.058532 eV/atom (corrected convention, run 3, in-sample n=39); batch layer lab/run_batch.py (D17, D18).
-- M5a: lab/tools_api.py
-  - lookup_screening(material_ids) -> dict: cap 5 ids; reads chgnet_hull_corrected from
-    reports/stability_calibration.csv; decisions via run_batch.screen_batch; unknown/excluded ids -> not_in_cache.
-  - get_policy() -> dict: policy JSON + caveat. Both never raise; no CHGNet/mp-api/network (D19).
-  - include_ground_truth=False by default (MP DFT hull hidden); top-level priority_note
-    (lower validation_priority = validate first) and timing_note (cache lookup, not CHGNet time).
-  - tests/test_tools_api.py: 8 tests (tmp CSV + tmp policy).
-- M-W4a: lab/test_menu.py (stdlib only): get_test_menu() = composition_proxy (T1), chgnet_triage (T1; blocks
-  pre_registered_at_0.05 + deployed_policy_in_sample; median relax s/candidate, "relaxation only"), dft_validation
-  (T3, not runnable); all numbers read from reports/ with `source`. get_budget() reads experiments/budget_001.yaml
-  (human placeholders: pool 200, 900 s); spend tracking not wired. tests/test_test_menu.py: 5 tests.
-- Open: confirm mp_dft_hull column (assumed mp_energy_above_hull_summary, vs _gga) matches run-3 ground truth.
-- Open: D6 (two model vendors) pending; controls/baselines/metrics not yet written.
-- Next: uv run pytest tests/test_tools_api.py tests/test_test_menu.py -v, then M5b (wrap tools in Omnigent agent YAML).
+- Current milestone: **M7 governance: Auditor + human gate + iteration 2 (written, awaiting test run)**
+- M0-M6 done. M6 run 6 (in-sample): 39 pool, 15 RETAIN / 24 DEPRIORITIZE, P 0.733, R 0.786, controls passed,
+  verdict not_supported, next decision narrow_downstream_to_survivors.
+- M7: lab/governance.py: audit_iteration (APPROVE/VETO, audit_id), record_human_decision (CLI only, approval_id),
+  get_previous_decision, plan_next_iteration (iteration 2, plan_id), write_final_report -> reports/discovery_report_run<id>.md.
+- scripts/human_gate.py (interactive gate); scripts/run_iteration_offline.py extended (audit, gate flag, --iteration2-run-id).
+- agents/discovery_loop.yaml: + auditor, next_iteration_planner sub-agents; PI stops at VETO and at the human gate.
+- tests/test_governance.py: 11 tests. Ledger schema unchanged (D21).
+- Open: Auditor will warn that run-6 counts (TP 11, FN 3) differ from stability_policy.json (TP 12, FN 3):
+  likely the assumed GT column mp_energy_above_hull_summary vs the calibration's column. Not fixed (needs your call).
+- Open: native Omnigent approval policy unverified; Auditor same vendor (D6); held-out validation blocked (no compute tool).
+- Next: pytest, gate run 6, iteration 2, then the demo.

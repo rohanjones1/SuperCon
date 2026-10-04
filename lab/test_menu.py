@@ -37,6 +37,11 @@ RELAX_TIMER_NOTE = (
     "relaxation only (includes per-call CHGNet import and model construction); "
     "excludes hull step and cached MP competing-phase fetch"
 )
+COST_BASIS_NOTE = (
+    "Upper bound. Based on relaxation-only median (includes model load); excludes the hull step "
+    "and Materials Project competing-phase fetch, so end-to-end cost per novel candidate is "
+    "unmeasured and likely higher."
+)
 
 
 def _read_json(path: Path) -> dict:
@@ -225,8 +230,9 @@ def get_budget(
                 "note": RELAX_TIMER_NOTE,
                 "source": f"reports/{CALIBRATION_CSV}:wall_ms (rows with empty error)",
             },
-            "affordable_chgnet_candidates": affordable,
-            "coverage_fraction": min(1.0, affordable / pool),
+            "affordable_chgnet_candidates_upper_bound": affordable,
+            "coverage_fraction_upper_bound": min(1.0, affordable / pool),
+            "cost_basis_note": COST_BASIS_NOTE,
         }
     except Exception as exc:
         return {"error": f"{type(exc).__name__}: {exc}"}

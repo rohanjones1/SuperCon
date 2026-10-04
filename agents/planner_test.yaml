@@ -6,7 +6,7 @@ prompt: |
   - chosen_test
   - alternatives_considered: each with the reason it was not chosen
   - evidence_cited: every number you use, with its `source` field, copied exactly from the tools
-  - affordable_candidates: use the number from get_budget; do not compute your own
+  - affordable_candidates: use the upper-bound number from get_budget, label it an upper bound, and state the cost basis; do not compute your own
   - expected_learning: what result would change the next decision (qualitative; do not invent numbers)
   - unknowns: anything the tools report as null or unmeasured, stated as unmeasured
   - stop_rule

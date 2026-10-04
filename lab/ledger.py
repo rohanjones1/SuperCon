@@ -151,14 +151,18 @@ def record_run(
     hardware: str | None,
     wall_ms: float | None,
     path: Path = DEFAULT_PATH,
+    experiment_id: int | None = None,
 ) -> int:
-    """Insert a run record and return the new run_id (int)."""
+    """Insert a run record and return the new run_id (int).
+
+    ``experiment_id`` optionally links the run to a prereg row (existing column).
+    """
     con = _connect(path)
     cur = con.execute(
         """INSERT INTO runs
-           (tool, tool_version, model_checkpoint, seed, hardware, wall_ms, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (tool, tool_version, model_checkpoint, seed, hardware, wall_ms, _now()),
+           (experiment_id, tool, tool_version, model_checkpoint, seed, hardware, wall_ms, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (experiment_id, tool, tool_version, model_checkpoint, seed, hardware, wall_ms, _now()),
     )
     run_id = cur.lastrowid
     con.commit()
@@ -211,6 +215,26 @@ def record_control(
     return row_id
 
 
+def record_candidate(
+    formula: str,
+    hypothesis_id: str | None = None,
+    batch_id: str | None = None,
+    generator: str | None = None,
+    path: Path = DEFAULT_PATH,
+) -> int:
+    """Insert a candidate row (existing schema) and return its id."""
+    con = _connect(path)
+    cur = con.execute(
+        """INSERT INTO candidates (formula, hypothesis_id, batch_id, generator, timestamp)
+           VALUES (?, ?, ?, ?, ?)""",
+        (formula, hypothesis_id, batch_id, generator, _now()),
+    )
+    row_id = cur.lastrowid
+    con.commit()
+    con.close()
+    return row_id
+
+
 def record_timing(stage: str, start: str, end: str, path: Path = DEFAULT_PATH) -> None:
     """Insert a timing record."""
     con = _connect(path)
@@ -234,3 +258,37 @@ def get_run(run_id: int, path: Path = DEFAULT_PATH) -> dict:
     if row is None:
         raise KeyError(f"run_id {run_id} not found")
     return dict(row)
+
+
+def get_prereg(prereg_id: int, path: Path = DEFAULT_PATH) -> dict:
+    """Return prereg row with ``content`` parsed from JSON. Raises KeyError if not found."""
+    con = _connect(path)
+    row = con.execute("SELECT * FROM prereg WHERE id = ?", (prereg_id,)).fetchone()
+    con.close()
+    if row is None:
+        raise KeyError(f"prereg id {prereg_id} not found")
+    out = dict(row)
+    out["content"] = json.loads(out["content"])
+    return out
+
+
+def get_prereg_id(hash_hex: str, path: Path = DEFAULT_PATH) -> int:
+    """Return the id of the most recent prereg row with this hash. Raises KeyError if absent."""
+    con = _connect(path)
+    row = con.execute(
+        "SELECT id FROM prereg WHERE hash = ? ORDER BY id DESC LIMIT 1", (hash_hex,)
+    ).fetchone()
+    con.close()
+    if row is None:
+        raise KeyError(f"prereg hash {hash_hex} not found")
+    return int(row["id"])
+
+
+def get_controls(run_id: int, path: Path = DEFAULT_PATH) -> list[dict]:
+    """Return all control rows for *run_id* in insertion order."""
+    con = _connect(path)
+    rows = con.execute(
+        "SELECT * FROM controls WHERE run_id = ? ORDER BY id", (run_id,)
+    ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]

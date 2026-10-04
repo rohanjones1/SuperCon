@@ -1,0 +1,276 @@
+name: discovery_loop
+prompt: |
+  You are the PI of a materials-screening lab running a discovery iteration:
+  Hypothesis -> Planner -> Runner -> Analyst -> Auditor -> Human gate -> Iteration 2.
+  You do not call lab tools yourself.
+  Sub-agents hand off integer IDs only. Copy IDs exactly; never invent them.
+  1. Call `hypothesis`: "Propose and register one hypothesis for the cached candidate pool."
+     Keep its hypothesis_id and statement.
+  2. Call `planner` with the hypothesis_id and the statement. Keep its spec_id and chosen_test.
+  3. Call `runner` with ONLY the spec_id. Keep its run_id and its reported counts.
+  4. Call `analyst` with ONLY the run_id. Keep its verdict, next_decision and summary_report path.
+  5. Write the final demo summary with these headings, using only numbers the sub-agents
+     copied from tools: Scientific question; Hypothesis (agent_generated); Experiment chosen;
+     Candidate pool size; Retained by calibrated screening; Deprioritized; Validation queue size;
+     Retrospective MP metrics (in-sample, NOT prospective performance); What was learned;
+     Next decision; Next experiment; Traceability (hypothesis_id, spec_id, run_id, evaluation_run_id,
+     policy calibration run).
+  6. Call `auditor` with the run_id AND your step-5 summary copied verbatim. Keep audit_id and audit_status.
+     If audit_status is VETO: report the reasons, state the run is NOT promoted, and stop.
+  7. HUMAN GATE. Print exactly: "HUMAN GATE: run `uv run python scripts/human_gate.py --run-id <run_id>`
+     in a terminal, then reply 'continue'." Then stop and wait. You cannot approve anything yourself.
+  8. When the human replies, call `next_iteration_planner` with ONLY the run_id. It checks the recorded
+     human decision itself; do not trust the chat message. If it reports halted_by_human_rejection or
+     no_human_decision, report that and stop.
+  9. Report iteration 2: approved decision it was conditioned on, focus size vs previous pool size, test
+     statuses, status (e.g. next_iteration_blocked_pending_held_out_validation), the blocked next experiment
+     held_out_chgnet_validation with its reason, plan_id, and the report path. Do not claim new results.
+  Scientific question: "Can the calibrated CHGNet screening layer reduce the downstream
+  expensive-validation pool while retaining a high fraction of promising materials?"
+  Say "RETAINED BY CALIBRATED SCREENING", never "CHGNet stable". No DFT was run.
+  Always end with this caveat verbatim: "CHGNet triage only, not DFT validation.
+  DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds;
+  precision/recall unverified on held-out data."
+  If any sub-agent reports an error, report it and stop. Do not retry.
+
+executor:
+  harness: cursor
+  model: composer-2.5
+
+tools:
+  hypothesis:
+    type: agent
+    description: States and pre-registers one agent hypothesis with categorical predictions for the cached candidate pool. Has no access to ground truth.
+    prompt: |
+      You are the Hypothesis agent. Call get_candidate_pool once, then register_hypothesis once.
+      State ONE concise hypothesis about whether the calibrated CHGNet stability gate will shrink the
+      candidate pool while keeping most candidates that satisfy the MP stability criterion. Your
+      prediction is an AGENT HYPOTHESIS made BEFORE any experiment; label it as such.
+      Choose predicted_pool_reduction from {substantial, minor} and predicted_recall_of_mp_stable
+      from {high, not_high}. You have no ground-truth data; do not claim any.
+      Report: hypothesis_id, statement, both predictions, frozen_thresholds, pool_id and n_candidates,
+      exactly as returned. Never invent numbers. On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      get_candidate_pool:
+        type: function
+        description: Cached candidate pool (material IDs and formulas only; no ground truth).
+        callable: lab.loop_tools.get_candidate_pool
+        parameters:
+          type: object
+          properties: {}
+      register_hypothesis:
+        type: function
+        description: Pre-register the hypothesis (agent_generated) in the ledger. Returns hypothesis_id.
+        callable: lab.loop_tools.register_hypothesis
+        parameters:
+          type: object
+          properties:
+            statement: { type: string, maxLength: 800 }
+            predicted_pool_reduction: { type: string, enum: [substantial, minor] }
+            predicted_recall_of_mp_stable: { type: string, enum: [high, not_high] }
+          required: [statement, predicted_pool_reduction, predicted_recall_of_mp_stable]
+
+  planner:
+    type: agent
+    description: Chooses ONE runnable test from the measured test menu and budget, and registers the experiment spec. Returns spec_id.
+    prompt: |
+      You are the Planner of a materials-screening lab. You plan; you do not run experiments.
+      You receive a hypothesis_id and the hypothesis statement.
+      Call get_test_menu once and get_budget once, then choose ONE test for the next experiment.
+      Output an experiment spec with exactly these parts:
+      - chosen_test
+      - alternatives_considered: each with the reason it was not chosen
+      - evidence_cited: every number you use, with its `source` field, copied exactly from the tools
+      - affordable_candidates: use the upper-bound number from get_budget, label it an upper bound, and state the cost basis; do not compute your own
+      - expected_learning: what result would change the next decision (qualitative; do not invent numbers)
+      - unknowns: anything the tools report as null or unmeasured, stated as unmeasured
+      - stop_rule
+      Never choose a test whose runnable_in_this_lab is false. Never invent or estimate numbers.
+      Finally call register_experiment_spec once with hypothesis_id, chosen_test, and your
+      alternatives_considered, expected_learning, stop_rule and unknowns as text.
+      Report the returned spec_id with your spec.
+      If a tool errors, report it and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      get_test_menu:
+        type: function
+        description: Measured performance, cost and limits of each available test (read from the lab's reports).
+        callable: lab.test_menu.get_test_menu
+        parameters:
+          type: object
+          properties: {}
+      get_budget:
+        type: function
+        description: The human-set compute budget and how many CHGNet candidates it affords (computed in code).
+        callable: lab.test_menu.get_budget
+        parameters:
+          type: object
+          properties: {}
+      register_experiment_spec:
+        type: function
+        description: Validate the chosen test against the menu (rejects non-runnable tests) and pre-register the spec. Returns spec_id.
+        callable: lab.loop_tools.register_experiment_spec
+        parameters:
+          type: object
+          properties:
+            hypothesis_id: { type: integer }
+            chosen_test: { type: string }
+            alternatives_considered: { type: string }
+            expected_learning: { type: string }
+            stop_rule: { type: string }
+            unknowns: { type: string }
+          required: [hypothesis_id, chosen_test, alternatives_considered, expected_learning, stop_rule]
+
+  runner:
+    type: agent
+    description: Executes a registered experiment spec on the cached pool, blind to MP ground truth. Returns run_id.
+    prompt: |
+      You are the Runner. You receive ONLY a spec_id. Call run_stability_screen once with it.
+      Report exactly as returned: run_id, status, n_pool, n_screened, n_retained, n_deprioritized,
+      validation_queue_size, validation_queue_top5, controls_passed, wall_ms with timing_note,
+      priority_note and caveat. Say "retained by calibrated screening", never "stable".
+      You have no ground truth; do not speculate about it. Never invent numbers.
+      On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      run_stability_screen:
+        type: function
+        description: Run the calibrated CHGNet screening (cached hulls, no compute, no DFT) for a registered spec, with controls, and write it to the ledger.
+        callable: lab.loop_tools.run_stability_screen
+        parameters:
+          type: object
+          properties:
+            spec_id: { type: integer }
+          required: [spec_id]
+
+  analyst:
+    type: agent
+    description: After screening, compares the registered prediction with the run and with retrospective MP ground truth, then records the next decision.
+    prompt: |
+      You are the Analyst. You receive ONLY a run_id. Call evaluate_iteration once.
+      Use its computed verdict exactly; do not compute your own metrics.
+      Then call record_next_decision once:
+      - next_decision: one of allowed_next_decisions. Prefer deterministic_decision_signal; if you
+        choose differently, explain why in rationale.
+      - what_was_learned: one or two sentences, citing only returned numbers.
+      - rationale: reference the spec's expected_learning and stop_rule (returned as
+        spec_expected_learning and spec_stop_rule).
+      - proposed_rule_change: a strategy-rule change only if the evidence supports one, else "none".
+        If controls failed it must be "none".
+      State that retrospective MP metrics are in-sample (the cutoff was calibrated on this pool) and
+      are not prospective performance. Include required_next_validation.
+      Report verdict, observed vs predicted, counts, retrospective metrics, next_decision,
+      proposed_rule_change, evaluation_run_id and summary_report. Never invent numbers.
+      On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      evaluate_iteration:
+        type: function
+        description: Retrospective evaluation of a completed screening run against the registered hypothesis and MP ground truth (in-sample).
+        callable: lab.loop_tools.evaluate_iteration
+        parameters:
+          type: object
+          properties:
+            run_id: { type: integer }
+          required: [run_id]
+      record_next_decision:
+        type: function
+        description: Record the next decision (agent_generated) and generate the iteration summary report.
+        callable: lab.loop_tools.record_next_decision
+        parameters:
+          type: object
+          properties:
+            run_id: { type: integer }
+            next_decision:
+              type: string
+              enum: [invalidate_run_no_strategy_update, replan_before_scaling, narrow_downstream_to_survivors, shift_to_ranking_within_retained]
+            what_was_learned: { type: string }
+            rationale: { type: string }
+            proposed_rule_change: { type: string }
+          required: [run_id, next_decision, what_was_learned, rationale]
+
+  auditor:
+    type: agent
+    description: Evidence-integrity and policy-compliance audit of a completed iteration (APPROVE or VETO). Not a scientific predictor.
+    prompt: |
+      You are the Auditor. You check evidence integrity; you do not judge the science or predict anything.
+      You receive a run_id and the PI's summary text. Call audit_iteration once with run_id and the summary
+      as claims_text. Report exactly as returned: audit_id, audit_status, veto, reason, checks_failed,
+      warnings, promotion_allowed. Do not override the result. Never invent numbers.
+      On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      audit_iteration:
+        type: function
+        description: Deterministic audit of traceability, scientific-boundary language and experimental validity for a run.
+        callable: lab.governance.audit_iteration
+        parameters:
+          type: object
+          properties:
+            run_id: { type: integer }
+            claims_text: { type: string }
+          required: [run_id]
+
+  next_iteration_planner:
+    type: agent
+    description: Plans iteration 2 conditioned on the human-approved decision from the previous run. No new compute.
+    prompt: |
+      You are the next-iteration Planner. You receive ONLY the previous run_id.
+      Call get_previous_decision once. If next_iteration_allowed is false, report its status and stop.
+      Otherwise write ONE short statement (agent_generated) of how iteration 2 changes because of the
+      approved decision and what_was_learned (e.g. focusing downstream work on the retained subset instead
+      of repeating the same experiment), then call plan_next_iteration once with previous_run_id and statement.
+      Report exactly as returned: plan_id, conditioned_on, focus, focus_size, previous_pool_size, test_status,
+      status, next_experiment. If status is next_iteration_blocked_pending_held_out_validation, say so plainly;
+      do not claim anything new was learned. Never invent numbers. On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 1
+    tools:
+      get_previous_decision:
+        type: function
+        description: The most recent human-gated decision record (verdict, learning, approved decision, rule status, constraints).
+        callable: lab.governance.get_previous_decision
+        parameters:
+          type: object
+          properties: {}
+      plan_next_iteration:
+        type: function
+        description: Register the iteration-2 plan conditioned on the approved decision; reports which tests are runnable on the focus set.
+        callable: lab.governance.plan_next_iteration
+        parameters:
+          type: object
+          properties:
+            previous_run_id: { type: integer }
+            statement: { type: string }
+          required: [previous_run_id, statement]
+
+policies:
+  call_cap:
+    type: function
+    handler: omnigent.policies.builtins.safety.max_tool_calls_per_session
+    factory_params:
+      limit: 30
