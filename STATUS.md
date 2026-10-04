@@ -9,6 +9,10 @@
   - include_ground_truth=False by default (MP DFT hull hidden); top-level priority_note
     (lower validation_priority = validate first) and timing_note (cache lookup, not CHGNet time).
   - tests/test_tools_api.py: 8 tests (tmp CSV + tmp policy).
+- M-W4a: lab/test_menu.py (stdlib only): get_test_menu() = composition_proxy (T1), chgnet_triage (T1; blocks
+  pre_registered_at_0.05 + deployed_policy_in_sample; median relax s/candidate, "relaxation only"), dft_validation
+  (T3, not runnable); all numbers read from reports/ with `source`. get_budget() reads experiments/budget_001.yaml
+  (human placeholders: pool 200, 900 s); spend tracking not wired. tests/test_test_menu.py: 5 tests.
 - Open: confirm mp_dft_hull column (assumed mp_energy_above_hull_summary, vs _gga) matches run-3 ground truth.
 - Open: D6 (two model vendors) pending; controls/baselines/metrics not yet written.
-- Next: uv run pytest tests/test_tools_api.py -v, then M5b (wrap tools in Omnigent agent YAML).
+- Next: uv run pytest tests/test_tools_api.py tests/test_test_menu.py -v, then M5b (wrap tools in Omnigent agent YAML).

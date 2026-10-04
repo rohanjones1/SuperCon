@@ -1,0 +1,7 @@
+# Human-set compute budget for the Planner. Flat key: value only (read by lab/test_menu.py, stdlib parser).
+budget_id: budget_001
+set_by: human
+objective: "Rank ambient-pressure conventional superconductor candidates for expensive validation at the lowest compute cost per validated hit, without losing recall."
+candidate_pool_size: 200
+total_compute_budget_s: 900
+note: "Hackathon placeholders set by the human; not derived from any measurement."
