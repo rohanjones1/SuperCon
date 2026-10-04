@@ -1,59 +1,85 @@
 # SuperCon
 
-Can a calibrated CHGNet screening layer shrink the pool sent to expensive validation and still keep most materials that look promising on a retrospective Materials Project hull label? This repo is a T1 triage demo for Hack-Nation Challenge 03. It does not claim a superconductor, a DFT result, or a room-temperature material.
+A small agentic lab that screens cached materials with a calibrated CHGNet energy-above-hull gate, then records whether that gate is worth using before a more expensive check. The question is:
 
-## Run 8 (in-sample)
+Can the calibrated CHGNet screening layer reduce the downstream expensive-validation pool while retaining a high fraction of promising materials?
 
-Screened 39 of 39 cached structures. **15 RETAINED BY CALIBRATED SCREENING**, **24 DEPRIORITIZE**, validation queue 15. Retrospective comparison with MP hull ≤ 0.05 eV/atom on column `mp_energy_above_hull_summary`: TP 11, FP 4, FN 3, TN 21, precision 0.733, recall 0.786. The cutoff was calibrated on this same pool, so those rates are a consistency check, not prospective performance. Computed verdict: **not_supported** (predicted minor pool reduction and high recall; observed substantial reduction and recall not high). Next decision: `narrow_downstream_to_survivors`. Auditor **VETO** (audit_id 10). Human gate **pending**. Held-out validation is blocked.
+This is evidence tier **T1**. It does not claim a superconductor, a DFT result, or a room-temperature material. CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data.
 
-`stability_policy.json` records TP 12 / TN 20 on a different ground-truth column. Both counts are shown. Do not pick one silently.
+The checked-in demo is **run 8**. A clone-and-run creates a **new** iteration with new IDs. Both use the same lab tools. Numbers are computed by that code and written to the local ledger. They are not typed by an LLM.
 
-CHGNet triage only, not DFT validation. DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds; precision/recall unverified on held-out data.
+## What the pipeline does
 
-Arm A (family-held-out composition proxy vs baselines) did not beat simple baselines on this split; confidence intervals overlap. It is not the headline.
+One discovery passes integer IDs only, in this order:
 
-No 10× speedup is claimed. Run 8’s wall time is a cache lookup, not CHGNet compute.
+1. Hypothesis registers a prediction before any screening.
+2. Planner chooses one test from the menu (`chgnet_triage` is the test this loop can execute).
+3. Runner screens the cached pool and checks controls.
+4. Analyst compares the prediction with the run and records the next decision.
+5. Auditor returns APPROVE or VETO.
+6. A human types the gate in a terminal. Agents cannot approve.
+7. Iteration 2 is planned only after that human decision. `held_out_chgnet_validation` stays blocked: this lab has no held-out CHGNet tool.
 
-## Omnigent
+## Run it from a fresh clone
 
-Agents and the handoff order live in `agents/discovery_loop.yaml` (PI, hypothesis, planner, runner, analyst, auditor, human gate, next-iteration planner). Run the discovery_loop agent in Omnigent as already used in this repo. This README does not add CLI flags.
+Requirements: Git, [uv](https://docs.astral.sh/uv/), Python 3.12 (`.python-version`). Run every command from the repository root.
 
-## Offline iteration
+```bash
+git clone https://github.com/rohanjones1/SuperCon.git
+cd SuperCon
+uv sync
+```
 
-Same tool sequence without an LLM, writing the local ledger:
+`uv sync` installs the project libraries. The discovery command below does not call CHGNet, the Materials Project API, or the network. It reads hulls from `reports/stability_calibration.csv` and the cutoff from `reports/stability_policy.json`. You do not need `MAT_PROJECT_API` for this path.
+
+Start one discovery. This creates `data/ledger.sqlite` (gitignored) and writes `experiments/runs/run_<id>*.json` plus a report under `reports/`.
 
 ```bash
 uv run python scripts/run_iteration_offline.py
 ```
 
-Run JSON is kept in `experiments/runs/`. The SQLite ledger stays local (`*.sqlite` is still gitignored) and is not served to the demo page.
+Read the printed blocks. Each one is a tool result. Keep the `run_id` from the runner step.
 
-## Demo
-
-Export the committed snapshot (uses run JSON when present, otherwise the reports plus a read-only screen of the calibration CSV):
+- If the auditor prints **VETO**, the script stops. That run is not promoted. The reason is in the audit block.
+- If the auditor does not veto, the script stops at the human gate and prints the next two commands. Run the gate in a terminal and type `APPROVE` or `REJECT` when asked. A vetoed audit accepts only `REJECT`.
 
 ```bash
-uv run python scripts/export_demo_snapshot.py --run-id 8
+uv run python scripts/human_gate.py --run-id <run_id>
+uv run python scripts/run_iteration_offline.py --iteration2-run-id <run_id>
 ```
 
-Open the page with a static server. `fetch` fails on `file://`.
+Use the `run_id` the first command printed. After a rejection, iteration 2 halts. After an approval, iteration 2 still cannot run held-out CHGNet. Expect a blocked next experiment, not a new validation result.
+
+The same tool sequence with live agents is `agents/discovery_loop.yaml`. Omnigent is separate software (`omnigent setup`, then `omnigent run agents/discovery_loop.yaml`, as in its own docs). The PI is instructed to stop at a VETO and at the human gate. The offline script is the path that runs the lab tools without an LLM.
+
+## Look at the recorded demo
+
+The site shows the committed snapshot of run 8. `fetch` fails if you open the HTML file directly.
 
 ```bash
 python -m http.server -d web 8000
 ```
 
-or `npx serve web`.
+Open `http://localhost:8000`. **Run one discovery** on that page reloads `web/data/snapshot.json` and walks the recorded handoff. It does not start the pipeline above.
 
-## Vercel
+To point the page at a run you just created:
 
-Import the repo. Output directory `web`. No install, no build, no environment variables, no Python runtime. `web/data/snapshot.json` must already be committed. The SQLite ledger is local-only and is not served.
+```bash
+uv run python scripts/export_demo_snapshot.py --run-id <run_id>
+```
 
-## Limits
+Refresh the local server. The Vercel site stays on whatever snapshot is committed in `web/data/snapshot.json`.
 
-Evidence tier T1 only. Run 8 is vetoed. The human gate is pending (`uv run python scripts/human_gate.py --run-id 8`). Iteration 2 has no plan_id. `held_out_chgnet_validation` is blocked because this lab cannot run held-out CHGNet. Arm A is not a win.
+## Checked-in run 8
 
-## Traceability (run 8)
+Screened 39 of 39. **15 RETAINED BY CALIBRATED SCREENING**, **24 DEPRIORITIZE**, validation queue 15. Retrospective MP hull ≤ 0.05 eV/atom on column `mp_energy_above_hull_summary`: TP 11, FP 4, FN 3, TN 21, precision 0.733, recall 0.786. Those rates are in-sample. The cutoff was fit on this same pool. Computed verdict: **not_supported**. Next decision: `narrow_downstream_to_survivors`. Auditor **VETO** (audit_id 10). Human gate **pending**.
 
-hypothesis_id 10 · spec_id 11 · run_id 8 · evaluation_run_id 9 · audit_id 10 · approval_id pending · plan_id pending · policy calibration run_id 3.
+`reports/stability_policy.json` records TP 12 and TN 20. The demo shows both. Do not collapse them into one count.
 
-Every number on the demo page comes from `web/data/snapshot.json`, which the exporter fills from those artifacts. LLMs do not compute metrics.
+Arm A, the family-held-out composition proxy, did not beat simple baselines on its split. It is not the headline. No speedup number is claimed. Run 8’s wall time is a cache lookup, not CHGNet compute.
+
+Traceability for that published run: hypothesis_id 10, spec_id 11, run_id 8, evaluation_run_id 9, audit_id 10, approval_id pending, plan_id pending, policy calibration run_id 3.
+
+## Deploy the page
+
+Vercel serves the static `web/` directory. No Python runtime and no environment variables. Details are in `web/README.md`.
