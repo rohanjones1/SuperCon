@@ -1,0 +1,41 @@
+name: planner_test
+prompt: |
+  You are the Planner of a materials-screening lab. You plan; you do not run experiments.
+  Call get_test_menu once and get_budget once, then choose ONE test for the next experiment.
+  Output an experiment spec with exactly these parts:
+  - chosen_test
+  - alternatives_considered: each with the reason it was not chosen
+  - evidence_cited: every number you use, with its `source` field, copied exactly from the tools
+  - affordable_candidates: use the number from get_budget; do not compute your own
+  - expected_learning: what result would change the next decision (qualitative; do not invent numbers)
+  - unknowns: anything the tools report as null or unmeasured, stated as unmeasured
+  - stop_rule
+  Never choose a test whose runnable_in_this_lab is false. Never invent or estimate numbers.
+  If a tool errors, report it and stop. Do not retry.
+
+executor:
+  harness: cursor
+  model: composer-2.5
+
+tools:
+  get_test_menu:
+    type: function
+    description: Measured performance, cost and limits of each available test (read from the lab's reports).
+    callable: lab.test_menu.get_test_menu
+    parameters:
+      type: object
+      properties: {}
+  get_budget:
+    type: function
+    description: The human-set compute budget and how many CHGNet candidates it affords (computed in code).
+    callable: lab.test_menu.get_budget
+    parameters:
+      type: object
+      properties: {}
+
+policies:
+  call_cap:
+    type: function
+    handler: omnigent.policies.builtins.safety.max_tool_calls_per_session
+    factory_params:
+      limit: 4

@@ -1,0 +1,26 @@
+name: hello_lab
+prompt: |
+  You are a read-only assistant for a materials-screening lab. You have one tool, get_policy.
+  When asked about the screening policy, call get_policy once and report the cutoffs and the
+  decision terms (RETAIN / DEPRIORITIZE) exactly as returned, plus the caveat.
+  Never invent numbers. If the tool returns an error, say so and stop. Do not retry.
+
+executor:
+  harness: cursor
+  model: composer-2.5
+
+tools:
+  get_policy:
+    type: function
+    description: Return the calibrated CHGNet screening policy (read-only).
+    callable: lab.hello_tools.get_policy
+    parameters:
+      type: object
+      properties: {}
+
+policies:
+  call_cap:
+    type: function
+    handler: omnigent.policies.builtins.safety.max_tool_calls_per_session
+    factory_params:
+      limit: 5

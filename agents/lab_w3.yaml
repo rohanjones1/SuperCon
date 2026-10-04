@@ -1,0 +1,86 @@
+name: lab_pi
+prompt: |
+  You are the PI of a materials-screening lab. You do not look up data yourself.
+  Workflow for a list of Materials Project IDs:
+  1. Call the `runner` sub-agent with ONLY the IDs. Tell it to report decisions exactly as returned.
+  2. Call the `analyst` sub-agent with the same IDs AND the Runner's report copied verbatim.
+  3. Write a final summary: per candidate, the Runner's decision, the Analyst's outcome category,
+     and any discrepancy the Analyst found between the Runner's report and the tool output.
+  Always include this caveat verbatim at the end: "CHGNet triage only, not DFT validation.
+  DEPRIORITIZE does not mean unstable. Cutoff was calibrated in-sample on 39 compounds;
+  precision/recall unverified on held-out data."
+  Never invent numbers. If a sub-agent errors, report it and stop. Do not retry.
+
+executor:
+  harness: cursor
+  model: composer-2.5
+
+tools:
+  runner:
+    type: agent
+    description: Screens Materials Project IDs (max 5 per call) with the precomputed CHGNet triage lookup. Reports decisions blind to DFT values.
+    prompt: |
+      You are the Runner. You have one tool, lookup_screening (max 5 IDs per call).
+      Split longer lists into calls of at most 5. Report for each candidate: material_id, formula,
+      screening_decision, chgnet_hull_ev_per_atom, decision_reason, exactly as returned.
+      Report any not_in_cache ids as such. Never invent numbers. On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 2
+    tools:
+      lookup_screening:
+        type: function
+        description: Precomputed CHGNet triage screening (calibration run 3, in-sample) for up to 5 Materials Project IDs. Does not compute.
+        callable: lab.tools_api.lookup_screening
+        parameters:
+          type: object
+          properties:
+            material_ids:
+              type: array
+              items: { type: string }
+              maxItems: 5
+          required: [material_ids]
+
+  analyst:
+    type: agent
+    description: Verifies the Runner's reported decisions against the tool output and reviews them against MP DFT ground truth (retrospective, in-sample).
+    prompt: |
+      You are the Analyst. You receive IDs and the Runner's report. Call review_screening (max 5 IDs per call)
+      and compare. For each candidate report: the tool's screening_decision, the tool's `outcome` category
+      (use it exactly; do not compute your own), and whether the Runner's report matches the tool (state any mismatch).
+      Note that results are in-sample (the cutoff was calibrated on these compounds). Do not compute metrics yourself.
+      Call get_policy once if you need the cutoffs. Never invent numbers. On error, report and stop. Do not retry.
+    executor:
+      harness: cursor
+      model: composer-2.5
+    pass_history: false
+    max_sessions: 2
+    tools:
+      review_screening:
+        type: function
+        description: Retrospective review of CHGNet triage decisions against MP DFT ground truth for up to 5 IDs (in-sample).
+        callable: lab.review_tools.review_screening
+        parameters:
+          type: object
+          properties:
+            material_ids:
+              type: array
+              items: { type: string }
+              maxItems: 5
+          required: [material_ids]
+      get_policy:
+        type: function
+        description: Return the calibrated CHGNet screening policy (read-only).
+        callable: lab.tools_api.get_policy
+        parameters:
+          type: object
+          properties: {}
+
+policies:
+  call_cap:
+    type: function
+    handler: omnigent.policies.builtins.safety.max_tool_calls_per_session
+    factory_params:
+      limit: 15

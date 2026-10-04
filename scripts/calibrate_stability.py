@@ -16,6 +16,15 @@ Amendment A changes (before any metric was seen):
   - Ground truth: energy_above_hull from GGA_GGA+U thermo doc (summary kept as ref column).
   - Compounds with no GGA_GGA+U thermo doc: excluded and printed.
   - Partial CSV: append each compound immediately; skip on rerun.
+
+Integrity fixes (post-calibration):
+  - Classification uses the frozen convention column (not a hardcoded fallback).
+  - Missing/non-finite hull predictions are excluded from TP/FP/TN/FN, not counted
+    as predicted-unstable.  n_missing_predictions is reported separately.
+  - Resumed partial CSV: blank error fields (NaN from pandas) are correctly
+    treated as successful rows.
+  - Leave-one-out integrity guard: verifies mat_id appears exactly once in the
+    cached GGA_GGA+U entries before building the reference hull.
 """
 from __future__ import annotations
 
@@ -111,6 +120,118 @@ def _wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     center = (p + z2 / (2 * n)) / denom
     margin = z * (p * (1 - p) / n + z2 / (4 * n * n)) ** 0.5 / denom
     return (max(0.0, center - margin), min(1.0, center + margin))
+
+
+# ---------------------------------------------------------------------------
+# Leave-one-out integrity guard
+# ---------------------------------------------------------------------------
+
+def _check_loso_integrity(gga_records: list[dict], mat_id: str) -> None:
+    """Verify that leave-one-out exclusion is well-defined before building the hull.
+
+    Raises RuntimeError (with a descriptive message) if:
+      - *mat_id* does not appear in *gga_records* as an ``entry_id``  → the
+        reference hull would NOT be leave-one-out (target is already absent).
+      - *mat_id* appears more than once → ambiguous exclusion.
+
+    This guard prevents silent errors where a non-LOO hull is used for
+    calibration without any warning.
+    """
+    n_before = len(gga_records)
+    matching = [r for r in gga_records if r["entry_id"] == mat_id]
+    n_matched = len(matching)
+    if n_matched == 0:
+        raise RuntimeError(
+            f"Leave-one-out integrity failure: '{mat_id}' not found "
+            f"in {n_before} fetched/cached GGA_GGA+U entries (matched by entry_id). "
+            "The hull would not be leave-one-out. Check that the cache is not stale "
+            "or that entry_id matches material_id for this compound."
+        )
+    if n_matched != 1:
+        raise RuntimeError(
+            f"Leave-one-out integrity failure: '{mat_id}' matches {n_matched} "
+            f"entries in {n_before} GGA_GGA+U records (expected exactly 1). "
+            "Possible duplicate entry_id in cache. Cannot build unambiguous LOO hull."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Classification metrics (frozen-convention-aware, missing-prediction-safe)
+# ---------------------------------------------------------------------------
+
+def _compute_classification(
+    ok_rows: list[dict],
+    frozen: str,
+    mp_hull_arr: "np.ndarray",
+    threshold: float = 0.05,
+) -> dict:
+    """Compute stability classification metrics using the frozen hull convention.
+
+    Only rows whose frozen hull prediction is *finite* are classified.
+    Rows with a missing or non-finite prediction are excluded and counted
+    in ``n_missing``; they are NOT treated as predicted-unstable (DEPRIORITIZE).
+
+    Parameters
+    ----------
+    ok_rows : list[dict]
+        Successful result rows (error field absent/None/NaN).
+    frozen : str
+        ``"corrected"`` or ``"uncorrected"`` — selects ``chgnet_hull_{frozen}``.
+    mp_hull_arr : np.ndarray
+        MP GGA/GGA+U energy-above-hull values, aligned with *ok_rows*.
+    threshold : float
+        MP hull threshold for "stable" (pre-registered: 0.05 eV/atom).
+
+    Returns
+    -------
+    dict with keys:
+        tp, fp, tn, fn, n_stable, n_missing, n_classified,
+        precision, recall, prec_ci, rec_ci, recall_indet
+    """
+    key = f"chgnet_hull_{frozen}"
+    pred_raw = np.array(
+        [r[key] if r[key] is not None else float("nan") for r in ok_rows],
+        dtype=float,
+    )
+
+    # Exclude non-finite predictions — do NOT count them as predicted-unstable
+    finite_mask  = np.isfinite(pred_raw)
+    n_missing    = int((~finite_mask).sum())
+    n_classified = int(finite_mask.sum())
+
+    if n_classified == 0:
+        return {
+            "tp": 0, "fp": 0, "tn": 0, "fn": 0,
+            "n_stable": 0, "n_missing": n_missing, "n_classified": 0,
+            "precision": float("nan"), "recall": float("nan"),
+            "prec_ci": (float("nan"), float("nan")),
+            "rec_ci":  (float("nan"), float("nan")),
+            "recall_indet": True,
+        }
+
+    pred        = pred_raw[finite_mask]
+    mp_hull_cls = mp_hull_arr[finite_mask]
+
+    pred_pos = pred        <= threshold
+    true_pos = mp_hull_cls <= threshold
+    n_stable = int(true_pos.sum())
+
+    tp = int((pred_pos &  true_pos).sum())
+    fp = int((pred_pos & ~true_pos).sum())
+    tn = int((~pred_pos & ~true_pos).sum())
+    fn = int((~pred_pos &  true_pos).sum())
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
+    recall    = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
+
+    return {
+        "tp": tp, "fp": fp, "tn": tn, "fn": fn,
+        "n_stable": n_stable, "n_missing": n_missing, "n_classified": n_classified,
+        "precision": precision, "recall": recall,
+        "prec_ci": _wilson_ci(tp, tp + fp),
+        "rec_ci":  _wilson_ci(tp, tp + fn),
+        "recall_indet": n_stable < 10,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +460,8 @@ def main() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
     # ---- Partial CSV: load existing, build skip set ----
+    # FIX: use pd.isna() to distinguish blank error fields (NaN from pandas)
+    # from real error strings. NaN means the row was successful on the previous run.
     partial_path = REPORTS_DIR / "stability_calibration_partial.csv"
     REPORTS_DIR.mkdir(exist_ok=True)
     rows: list[dict] = []
@@ -434,6 +557,20 @@ def main() -> None:
         chgnet_epa = res["energy_per_atom"]
         relaxed    = res["relaxed_structure"]
 
+        # Leave-one-out integrity guard — must run before any hull computation.
+        # Fails loudly if mat_id is absent from the cached entries or duplicated.
+        try:
+            _check_loso_integrity(gga_records, mat_id)
+        except RuntimeError as exc:
+            print(f"\n  LOSO_INTEGRITY_FAIL: {exc}")
+            row = _make_row(rec, chemsys, mp_epa_gga=mp_epa_gga,
+                            mp_hull_gga=mp_hull_gga,
+                            mp_uncorr_epa=mp_uncorr_epa,
+                            wall_ms=res["wall_ms"], error=str(exc))
+            _append_partial(row, partial_path)
+            rows.append(row)
+            continue
+
         # Leave-one-out hull: corrected reference
         hull_corr: float | None = None
         try:
@@ -479,7 +616,9 @@ def main() -> None:
         print(f"\n  Excluded (no GGA_GGA+U thermo doc): {excluded_no_gt}")
 
     # ---- Metrics (only successful rows) ----
-    ok = [r for r in rows if not r.get("error")]
+    # FIX: use pd.isna() so that blank error fields from a resumed CSV (NaN in
+    # pandas) are correctly identified as successful rows, not failures.
+    ok = [r for r in rows if pd.isna(r.get("error"))]
     n_ok, n_fail = len(ok), len(rows) - len(ok)
     if n_fail:
         print(f"\n  {n_fail} failed/excluded (see partial CSV)")
@@ -507,25 +646,24 @@ def main() -> None:
     best_hull_mae = min(valid_maes) if valid_maes else float("nan")
     frozen = "corrected" if (np.isnan(mae_hull_uncorr) or mae_hull_corr <= mae_hull_uncorr) else "uncorrected"
 
+    # ---- Classification: use frozen convention; exclude missing predictions ----
+    # FIX 1: use f"chgnet_hull_{frozen}" — not a hardcoded column name.
+    # FIX 2: rows where the frozen-column hull is None/NaN are excluded from
+    #         TP/FP/TN/FN rather than being silently treated as predicted-unstable.
     THRESHOLD = 0.05
-    pred_hull = np.array([
-        r["chgnet_hull_corrected"] if r["chgnet_hull_corrected"] is not None
-        else r["chgnet_hull_uncorrected"]
-        for r in ok
-    ], dtype=float)
-    pred_pos  = pred_hull <= THRESHOLD
-    true_pos  = mp_hull_arr <= THRESHOLD
-    n_stable  = int(true_pos.sum())
-
-    tp = int((pred_pos & true_pos).sum())
-    fp = int((pred_pos & ~true_pos).sum())
-    tn = int((~pred_pos & ~true_pos).sum())
-    fn = int((~pred_pos & true_pos).sum())
-    precision = tp / (tp + fp) if (tp + fp) > 0 else float("nan")
-    recall    = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
-    prec_ci   = _wilson_ci(tp, tp + fp)
-    rec_ci    = _wilson_ci(tp, tp + fn)
-    recall_indet = n_stable < 10
+    cls          = _compute_classification(ok, frozen, mp_hull_arr, THRESHOLD)
+    tp           = cls["tp"]
+    fp           = cls["fp"]
+    tn           = cls["tn"]
+    fn           = cls["fn"]
+    n_stable     = cls["n_stable"]
+    n_missing    = cls["n_missing"]
+    n_classified = cls["n_classified"]
+    precision    = cls["precision"]
+    recall       = cls["recall"]
+    prec_ci      = cls["prec_ci"]
+    rec_ci       = cls["rec_ci"]
+    recall_indet = cls["recall_indet"]
 
     usable = best_hull_mae <= 0.06 and (recall_indet or recall >= 0.80)
     verdict = "USABLE" if usable else "NOT USABLE AS-IS"
@@ -563,9 +701,11 @@ def main() -> None:
             },
             "c_stability_classification_at_0.05": {
                 "n_stable_mp": n_stable,
+                "n_classified": n_classified,
+                "n_missing_predictions": n_missing,
                 "tp": tp, "fp": fp, "tn": tn, "fn": fn,
-                "precision": precision, "precision_wilson_ci_95": prec_ci,
-                "recall": recall, "recall_wilson_ci_95": rec_ci,
+                "precision": precision, "precision_wilson_ci_95": list(prec_ci),
+                "recall": recall, "recall_wilson_ci_95": list(rec_ci),
                 "recall_indeterminate": recall_indet,
             },
         },
@@ -590,7 +730,8 @@ def main() -> None:
     print(f"  (b) Hull MAE (corrected ref):   {mae_hull_corr:.4f} eV/atom")
     print(f"      Hull MAE (uncorrected ref):  {mae_hull_uncorr:.4f} eV/atom")
     print(f"      *** FROZEN convention: {frozen} (lower hull MAE) ***")
-    print(f"  (c) n_stable(MP_GGA)={n_stable}  @ threshold 0.05 eV/atom:")
+    print(f"  (c) n_stable(MP_GGA)={n_stable}  n_classified={n_classified}  "
+          f"n_missing_predictions={n_missing}  @ threshold 0.05 eV/atom:")
     print(f"      precision={precision:.3f}  Wilson95=[{prec_ci[0]:.3f},{prec_ci[1]:.3f}]")
     if recall_indet:
         print(f"      recall=INDETERMINATE (n_stable={n_stable} < 10)")

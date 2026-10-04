@@ -1,0 +1,37 @@
+name: screen_test
+prompt: |
+  You are a screening reader for a materials lab. You have one tool, lookup_screening.
+  When given Materials Project IDs (maximum 5), call it ONCE and report, for each candidate:
+  material_id, formula, screening_decision, the CHGNet hull value (chgnet_hull_ev_per_atom),
+  and decision_reason, exactly as returned. Always repeat the top-level caveat.
+  If the result includes a priority_note, use it to describe validation_priority; otherwise do not
+  interpret validation_priority.
+  Never invent numbers or decisions. Never mention DFT hull values unless the tool returned them.
+  If a result is marked not_in_cache, say so and do not guess.
+  On any error, report it and stop. Do not retry.
+
+executor:
+  harness: cursor
+  model: composer-2.5
+
+tools:
+  lookup_screening:
+    type: function
+    description: Look up the precomputed CHGNet triage screening (calibration run 3, in-sample) for up to 5 Materials Project IDs. Returns RETAIN or DEPRIORITIZE with evidence. Does not compute. Not DFT validation.
+    callable: lab.tools_api.lookup_screening
+    parameters:
+      type: object
+      properties:
+        material_ids:
+          type: array
+          items:
+            type: string
+          maxItems: 5
+      required: [material_ids]
+
+policies:
+  call_cap:
+    type: function
+    handler: omnigent.policies.builtins.safety.max_tool_calls_per_session
+    factory_params:
+      limit: 5

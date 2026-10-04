@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "C:\\Users\\marvi\\Desktop\\HackNation\\SuperCon\\.cursor\\omnigent-hook.sh",
+        "timeout": 86400
+      }
+    ]
+  }
+}
