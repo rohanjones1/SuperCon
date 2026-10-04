@@ -29,6 +29,7 @@ from lab import ledger as _ledger
 from lab import run_batch as _rb
 from lab import test_menu as _tm
 from lab import tools_api as _ta
+from lab.claims import scan_claims
 from lab.decision import load_policy
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -57,8 +58,9 @@ NEXT_DECISIONS = (
     "shift_to_ranking_within_retained",
 )
 IN_SAMPLE_WARNING = (
-    "In-sample: the screening cutoff was calibrated on this same pool, so retrospective "
-    "recall/precision here are a consistency check, not evidence of generalization."
+    "Retrospective, in-sample: the screening cutoff was calibrated on this same pool against the MP "
+    "labels, so recall/precision here are a calibration consistency check, not prospective performance "
+    "and not DFT validation; generalization unverified."
 )
 REQUIRED_NEXT_VALIDATION = (
     "Held-out evaluation of the calibrated cutoff on compounds not used for calibration "
@@ -330,12 +332,16 @@ def evaluate_iteration(run_id: int) -> dict:
         hyp = _prereg("hypothesis", spec["hypothesis_id"])["content"]
         thr = hyp["frozen_thresholds"]
 
+        policy = load_policy(POLICY_PATH)
+        gt_col = _ta.ground_truth_column(policy)
         rows = _pool_rows()
+        if rows and any(gt_col not in r for r in rows.values()):
+            return _err(f"ground-truth column {gt_col!r} (from policy) missing from {Path(CSV_PATH).name}")
         n_missing = sum(1 for c in manifest["candidates"] if c["material_id"] not in rows)
         screened = [
             _rb.CandidateStabilityResult(
                 c["material_id"], c["formula"], c["chgnet_hull_ev_per_atom"],
-                mp_hull_ev_per_atom=_ta._parse_float(rows.get(c["material_id"], {}).get(_ta.MP_DFT_HULL_COLUMN)),
+                mp_hull_ev_per_atom=_ta._parse_float(rows.get(c["material_id"], {}).get(gt_col)),
                 screening_decision=c["screening_decision"],
             )
             for c in manifest["candidates"]
@@ -391,10 +397,17 @@ def evaluate_iteration(run_id: int) -> dict:
             "retrospective_mp_metrics": {
                 "label": "retrospective_calibration_metrics (in-sample, MP GGA/GGA+U hull <= 0.05 eV/atom)",
                 "warning": IN_SAMPLE_WARNING,
-                "mp_hull_column": _ta.MP_DFT_HULL_COLUMN,
+                "mp_hull_column": gt_col,
                 **{k: _finite(retro[k]) for k in ("tp", "fp", "fn", "tn", "retrospective_precision",
                                                    "retrospective_recall", "n_with_ground_truth")},
             },
+            "retrospective_summary_sentence": (
+                f"Retrospective in-sample comparison with MP labels ({gt_col} <= "
+                f"{_ta.GROUND_TRUTH_CRITERION_EV_PER_ATOM} eV/atom) on the calibration pool, not prospective "
+                f"and not DFT validation: TP {retro['tp']}, FP {retro['fp']}, FN {retro['fn']}, TN {retro['tn']}; "
+                f"in-sample precision {_fmt(_finite(retro['retrospective_precision']))}, "
+                f"in-sample recall {_fmt(_finite(retro['retrospective_recall']))}."
+            ),
             "deterministic_decision_signal": signal,
             "allowed_next_decisions": list(NEXT_DECISIONS),
             "required_next_validation": REQUIRED_NEXT_VALIDATION,
@@ -433,6 +446,18 @@ def record_next_decision(
         rule = (proposed_rule_change or "none").strip()[:800]
         if not ev["controls_passed"] and rule.lower() != "none":
             return _err("controls failed: proposed_rule_change must be 'none'")
+        violations = sorted({f"{name}:{field}" for field, text in
+                             (("what_was_learned", what_was_learned), ("rationale", rationale),
+                              ("proposed_rule_change", rule))
+                             for name in scan_claims(str(text))})
+        if violations:
+            return {**_err("boundary_language: rewrite these fields and call record_next_decision again; "
+                           "nothing was recorded"),
+                    "violations": violations,
+                    "guidance": ("When citing recall, precision, TP/FP/FN/TN, MP-stable labels or missed candidates, "
+                                 "say 'retrospective in-sample'. Use 'RETAINED BY CALIBRATED SCREENING' / "
+                                 "'DEPRIORITIZED BY SCREENING'; never call CHGNet DFT validation or claim "
+                                 "generalization. You may copy retrospective_summary_sentence verbatim.")}
         decision = {
             "run_id": int(run_id), "label": "agent_generated",
             "next_decision": next_decision,
@@ -476,7 +501,7 @@ def _summary_md(ev: dict, dec: dict) -> str:
         "|---|---|",
         f"| Candidate pool | {c['n_pool']} (screened {c['n_screened']}) |",
         f"| RETAINED BY CALIBRATED SCREENING | {c['n_retained']} |",
-        f"| DEPRIORITIZED | {c['n_deprioritized']} |",
+        f"| DEPRIORITIZED BY SCREENING | {c['n_deprioritized']} |",
         f"| Validation queue size | {c['validation_queue_size']} |",
         f"| Retained fraction | {_fmt(c['retained_fraction'])} |",
         f"| Controls passed | {ev['controls_passed']} |",

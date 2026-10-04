@@ -28,6 +28,7 @@ CALIB_JSON = REPO_ROOT / "reports" / "stability_calibration.json"
 OUT_JSON = REPO_ROOT / "reports" / "stability_policy.json"
 
 GT_THRESHOLD = 0.05   # MP GGA/GGA+U hull — ground truth, NOT a tunable parameter
+GT_COLUMN = "mp_energy_above_hull_gga"
 RECALL_TARGET = 0.80  # from addendum_stability_001.yaml usability criterion
 
 
@@ -46,12 +47,15 @@ def main() -> None:
     frozen_convention = calib["metrics"]["b_hull_mae"]["frozen_convention"]
     run_id = calib["run_id"]
 
-    df = pd.read_csv(CALIB_CSV)
+    # float_precision="round_trip": parse floats exactly as Python float() does (lab/tools_api.py).
+    # The pandas default C parser can differ in the last bits, which made the stored cutoff differ
+    # from the boundary row's hull as read by lab.decision.screen() (see DECISIONS.md D22).
+    df = pd.read_csv(CALIB_CSV, float_precision="round_trip")
     # Only rows with successful CHGNet evaluation
     df = df[df["error"].isna()].copy()
 
     # Ground truth: MP GGA/GGA+U hull <= GT_THRESHOLD
-    df["gt_stable"] = df["mp_energy_above_hull_gga"] <= GT_THRESHOLD
+    df["gt_stable"] = df[GT_COLUMN] <= GT_THRESHOLD
 
     # CHGNet hull column determined by frozen convention
     chgnet_col = (
@@ -59,6 +63,9 @@ def main() -> None:
         else "chgnet_hull_uncorrected"
     )
     df["chgnet_hull"] = df[chgnet_col].astype(float)
+    # Missing predictions are excluded, never counted as DEPRIORITIZE (same rule as lab.tools_api._load_cache).
+    n_missing_predictions = int(df["chgnet_hull"].isna().sum())
+    df = df[df["chgnet_hull"].notna()].copy()
 
     n_stable = int(df["gt_stable"].sum())
     n_unstable = len(df) - n_stable
@@ -91,6 +98,7 @@ def main() -> None:
         chosen = max(sweep, key=lambda r: (r["recall"], -r["cutoff"]))
         target_met = False
 
+    cutoff_rows = df.loc[df["chgnet_hull"] == chosen["cutoff"], "material_id"].tolist()
     prec_ci = _wilson_ci(chosen["tp"], chosen["tp"] + chosen["fp"])
     rec_ci = _wilson_ci(chosen["tp"], n_stable)
 
@@ -111,6 +119,13 @@ def main() -> None:
         "n_unstable_gt": n_unstable,
         "recall_target": RECALL_TARGET,
         "recall_target_met": target_met,
+        "ground_truth_column": GT_COLUMN,
+        "chgnet_hull_column": chgnet_col,
+        "cutoff_source_material_ids": cutoff_rows,
+        "n_rows_used": int(len(df)),
+        "n_missing_predictions_excluded": n_missing_predictions,
+        "csv_float_parsing": "round_trip (identical to Python float())",
+        "selection_rule": "minimum CHGNet hull cutoff with in-sample recall >= recall_target",
         "note": (
             "screening_cutoff_ev_per_atom is the CHGNet operational triage threshold — "
             "a calibrated approximation to the MP hull. "

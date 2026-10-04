@@ -28,6 +28,7 @@ from lab import ledger as _ledger
 from lab import loop_tools as _lt
 from lab import test_menu as _tm
 from lab import tools_api as _ta
+from lab.claims import scan_claims  # noqa: F401  (re-exported as governance.scan_claims)
 from lab.decision import load_policy
 
 TOOL_VERSION = "m7-governance-1"
@@ -44,26 +45,6 @@ VALIDATION_BOUNDARY = (
     "in-sample. Held-out validation of the calibrated cutoff remains required."
 )
 
-# Forbidden-claim patterns (case-insensitive). A match containing a negation is ignored.
-_FORBIDDEN = {
-    "chgnet_described_as_dft": [
-        r"dft[- ]validat\w*", r"validated (?:by|with|using) dft", r"dft[- ]confirmed",
-        r"confirmed (?:by|with) dft", r"chgnet\W+(?:is|as|equals)\W+(?:a\W+)?dft",
-    ],
-    "retain_described_as_proven_stable": [
-        r"\b(?:proven|confirmed|guaranteed|verified) stable\b", r"\bchgnet[- ]stable\b",
-        r"retain\w*\b[^.\n]{0,40}\b(?:are|is) (?:thermodynamically )?stable\b",
-    ],
-    "deprioritize_described_as_unstable": [
-        r"deprioriti[sz]\w*\b[^.\n]{0,40}\b(?:are|is|as|means|=)\s+(?:thermodynamically\s+)?unstable\b",
-    ],
-    "policy_presented_as_generalization": [
-        r"generali[sz]\w*\s+(?:to|on)\s+(?:unseen|new|novel|held[- ]out)",
-        r"prospective (?:performance|recall|precision)",
-    ],
-}
-_NEGATION = re.compile(r"\bnot\b|n't\b|\bnever\b|\bno\b|\bwithout\b", re.I)
-_METRIC_CLAIM = re.compile(r"(?:precision|recall)[^.\n]{0,40}?\b0\.\d{2,}", re.I)
 _IN_SAMPLE = re.compile(r"in[- ]sample", re.I)
 
 
@@ -94,21 +75,6 @@ def _rel(path: Path) -> str:
 # ---------------------------------------------------------------------------
 # Auditor
 # ---------------------------------------------------------------------------
-
-def scan_claims(text: str) -> list[str]:
-    """Return failed boundary-check names for free text (forbidden claims, unlabeled metrics)."""
-    failed = []
-    for name, patterns in _FORBIDDEN.items():
-        for pat in patterns:
-            hit = any(not _NEGATION.search(m.group(0)) and not _NEGATION.search(text[max(0, m.start() - 12):m.start()])
-                      for m in re.finditer(pat, text, re.I))
-            if hit:
-                failed.append(name)
-                break
-    if _METRIC_CLAIM.search(text) and not _IN_SAMPLE.search(text):
-        failed.append("retrospective_metrics_without_in_sample_label")
-    return failed
-
 
 def audit_iteration(run_id: int, claims_text: str = "") -> dict:
     """Deterministic evidence-integrity and policy-compliance audit of one iteration."""
@@ -187,14 +153,20 @@ def audit_iteration(run_id: int, claims_text: str = "") -> dict:
             if ev["controls_passed"] is False:
                 check("failed_controls_force_invalidation",
                       ev["deterministic_decision_signal"] == "invalidate_run_no_strategy_update")
+            gt_col = _ta.ground_truth_column(policy)
+            check("ground_truth_column_matches_policy", rm.get("mp_hull_column") == gt_col)
             pol_counts = {k: policy.get(k) for k in ("tp", "fp", "fn", "tn")}
             if all(v is not None for v in pol_counts.values()):
                 obs = {k: rm.get(k) for k in pol_counts}
-                if obs != pol_counts:
-                    warnings.append(
-                        f"retrospective counts {obs} differ from stability_policy.json counts {pol_counts}; "
-                        f"ground-truth column ({rm.get('mp_hull_column')}) may differ from the one used "
-                        "for calibration (open assumption)")
+                if manifest["n_screened"] == sum(pol_counts.values()):
+                    # Full calibration pool: the deployed policy must reproduce its own artifact exactly.
+                    check("policy_application_reproduces_calibration_counts", obs == pol_counts)
+                    if obs != pol_counts:
+                        warnings.append(f"retrospective counts {obs} differ from stability_policy.json counts "
+                                        f"{pol_counts} (column {rm.get('mp_hull_column')}); see "
+                                        "scripts/diagnose_policy_mismatch.py")
+                elif obs != pol_counts:
+                    warnings.append(f"subset of the calibration pool: counts {obs} not comparable to policy {pol_counts}")
 
         if nd is not None and ev is not None:
             check("next_decision_traces_to_run", nd["run_id"] == run_id)
@@ -483,7 +455,7 @@ def write_final_report(run_id: int) -> dict:
             f"- Stop rule (agent_generated): {spec['stop_rule']}", "",
             "## Result",
             f"- Screened {m['n_screened']} of {m['n_pool']}; RETAINED BY CALIBRATED SCREENING {m['n_retained']}; "
-            f"DEPRIORITIZED {m['n_deprioritized']}; validation queue {len(m['validation_queue'])}",
+            f"DEPRIORITIZED BY SCREENING {m['n_deprioritized']}; validation queue {len(m['validation_queue'])}",
             f"- Controls: {'passed' if m['controls_passed'] else 'FAILED'} "
             f"({', '.join(c['control_id'] for c in m['controls'])})",
             f"- Runtime: {_f(m['wall_ms'])} ms (cache lookup, not CHGNet compute time)",

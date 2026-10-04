@@ -47,9 +47,15 @@ PRIORITY_NOTE = (
 )
 TIMING_NOTE = "wall_ms is a cache lookup, not CHGNet compute time."
 
-# MP hull column used as retrospective ground truth (assumption: MP summary hull,
-# i.e. MP2020-corrected GGA/GGA+U mixing; see STATUS.md open issue).
-MP_DFT_HULL_COLUMN = "mp_energy_above_hull_summary"
+# MP hull column used as retrospective ground truth. Must be the column the policy was
+# calibrated against (scripts/build_stability_policy.py: mp_energy_above_hull_gga <= 0.05).
+# The policy JSON records it as "ground_truth_column"; this constant is the fallback.
+MP_DFT_HULL_COLUMN = "mp_energy_above_hull_gga"
+
+
+def ground_truth_column(policy: dict) -> str:
+    """Return the retrospective ground-truth column recorded in the policy (single source of truth)."""
+    return policy.get("ground_truth_column", MP_DFT_HULL_COLUMN)
 
 
 def _parse_float(value) -> float | None:
@@ -139,8 +145,10 @@ def lookup_screening(
                 "in_sample": True,
                 "source": source,
             }
-            if include_ground_truth and MP_DFT_HULL_COLUMN in cache[m]:
-                item["mp_dft_hull_ev_per_atom"] = _parse_float(cache[m][MP_DFT_HULL_COLUMN])
+            gt_col = ground_truth_column(policy)
+            if include_ground_truth and gt_col in cache[m]:
+                item["mp_dft_hull_ev_per_atom"] = _parse_float(cache[m][gt_col])
+                item["mp_hull_column"] = gt_col
                 item["mp_dft_hull_label"] = MP_DFT_HULL_LABEL
             results.append(item)
 
